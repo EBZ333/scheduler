@@ -9,17 +9,17 @@
 <body>
 <header>
   <h1>Scheduler</h1>
-  <p class="sub">Your Canvas assignments, pulled from your calendar feed.</p>
+  <p class="sub">Canvas assignments lined up against your block schedule.</p>
 </header>
 
 <main>
   <section id="setup" class="card">
-    <h2>Connect Canvas</h2>
+    <h2>1. Connect Canvas</h2>
     <p>In Canvas go to <strong>Calendar → Calendar Feed</strong> and copy the link. It looks like
       <code>https://yourschool.instructure.com/feeds/calendars/user_XXXX.ics</code>.
-      The long code in the URL is what lets this page read your assignments. It is saved only in this browser.</p>
+      The code in the URL is what lets this page read your assignments. It is saved only in this browser.</p>
     <form id="feed-form">
-      <input id="feed-url" type="url" placeholder="Paste your calendar feed URL" required>
+      <input id="feed-url" type="url" placeholder="Paste your Canvas calendar feed URL" required>
       <button type="submit">Load assignments</button>
     </form>
     <details>
@@ -32,13 +32,34 @@
     <p id="status" class="status"></p>
   </section>
 
+  <section id="schedule-setup" class="card">
+    <h2>2. Connect your block schedule</h2>
+    <p>In Google Calendar open <strong>Settings → your schedule calendar → Integrate calendar</strong> and copy the
+      <strong>Secret address in iCal format</strong>. Events named like <code>Block 1</code> … <code>Block 8</code> are picked up as blocks.</p>
+    <form id="sched-form">
+      <input id="sched-url" type="url" placeholder="Paste your Google Calendar secret iCal address" required>
+      <button type="submit">Load schedule</button>
+    </form>
+    <details>
+      <summary>Upload the .ics instead</summary>
+      <input id="sched-file" type="file" accept=".ics,text/calendar">
+    </details>
+    <p id="sched-status" class="status"></p>
+
+    <div id="mapping" hidden>
+      <h3>Which class is which block?</h3>
+      <p class="hint">Pick the Canvas course for each block. Anything else on the calendar (lunch, assembly…) still shows on the day.</p>
+      <div id="mapping-rows"></div>
+    </div>
+  </section>
+
   <section id="results" class="card" hidden>
     <div class="toolbar">
       <h2>Assignments <span id="count"></span></h2>
       <label><input type="checkbox" id="show-past"> Show past</label>
       <select id="course-filter"><option value="">All courses</option></select>
       <button id="refresh" type="button">Refresh</button>
-      <button id="forget" type="button" class="ghost">Forget feed</button>
+      <button id="forget" type="button" class="ghost">Forget feeds</button>
     </div>
     <div id="list"></div>
   </section>

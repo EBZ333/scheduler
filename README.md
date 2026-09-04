@@ -14,5 +14,9 @@ The URL is saved only in your browser's localStorage. If the feed can't be fetch
 ## Files
 
 - `index.html` / `style.css`: page and styling
-- `ics.js`: small ICS parser; splits Canvas titles like `Essay 2 [English 10]` into title + course
+- `ics.js`: ICS parser with RRULE expansion (daily/weekly, EXDATE, overrides); splits Canvas titles like `Essay 2 [English 10]` into title + course
 - `app.js`: fetching, caching, filtering, rendering
+
+## Block schedule
+
+Paste your Google Calendar **Secret address in iCal format** (Settings → the calendar → Integrate calendar). Events named `Block 1` … `Block 8` are detected as blocks; map each block to a Canvas course in the UI. Each day then shows its blocks, and each assignment shows whether that class meets on the due day (and if not, when the last class before the deadline is).
