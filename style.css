@@ -50,3 +50,35 @@ h3 { font-size: 1rem; margin: 1rem 0 0.25rem; }
 .tag { display: inline-block; font-size: 0.75rem; padding: 0 0.45rem; border-radius: 4px; background: color-mix(in srgb, var(--accent) 15%, transparent); margin-left: 0.4rem; }
 .tag.muted { background: transparent; border: 1px dashed var(--line); }
 .empty.small { padding: 0.25rem 0; font-size: 0.9rem; }
+
+/* view toggle */
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { background: transparent; color: var(--muted); border-radius: 0; padding: 0.4rem 0.8rem; }
+.seg button.active { background: var(--accent); color: #fff; }
+
+/* calendar */
+.cal-nav { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.75rem; }
+.cal-nav .ghost { padding: 0.35rem 0.7rem; }
+#cal-range { font-weight: 600; margin-left: 0.25rem; }
+.cal-grid { display: grid; grid-template-columns: 44px repeat(var(--days), 1fr); gap: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font-size: 0.8rem; }
+.cal-head { padding: 0.4rem 0.3rem; text-align: center; border-bottom: 1px solid var(--line); border-left: 1px solid var(--line); background: var(--bg); }
+.cal-head.today { color: var(--accent); font-weight: 700; }
+.cal-head small { display: block; color: var(--muted); font-weight: normal; }
+.cal-corner { border-bottom: 1px solid var(--line); background: var(--bg); }
+.cal-allday { min-height: 1.4rem; padding: 0.15rem; border-left: 1px solid var(--line); border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; }
+.cal-times { position: relative; }
+.cal-times div { position: absolute; right: 4px; transform: translateY(-50%); color: var(--muted); font-size: 0.7rem; }
+.cal-col { position: relative; border-left: 1px solid var(--line); background:
+  repeating-linear-gradient(to bottom, transparent 0, transparent calc(var(--hour) - 1px), var(--line) calc(var(--hour) - 1px), var(--line) var(--hour)); }
+.cal-col.today { background-color: color-mix(in srgb, var(--accent) 5%, transparent); }
+.cal-ev { position: absolute; left: 2px; right: 2px; border-radius: 5px; padding: 2px 5px; overflow: hidden; line-height: 1.25; }
+.cal-ev.klass { background: color-mix(in srgb, var(--accent) 16%, var(--card)); border-left: 3px solid var(--accent); color: var(--text); }
+.cal-ev.klass.unmapped { background: color-mix(in srgb, var(--muted) 14%, var(--card)); border-left-color: var(--muted); color: var(--muted); }
+.cal-ev .t { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-ev .tm { color: var(--muted); font-size: 0.7rem; }
+.cal-due { display: block; margin-top: 2px; padding: 1px 5px; border-radius: 4px; background: var(--soon); color: #fff; font-size: 0.72rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-decoration: none; }
+.cal-due.past { opacity: 0.5; }
+.cal-due.loose { position: absolute; left: 2px; right: 2px; margin: 0; z-index: 2; }
+.cal-now { position: absolute; left: 0; right: 0; height: 2px; background: var(--late); z-index: 3; }
+.moved { color: var(--muted); font-weight: normal; text-decoration: line-through; margin-left: 0.3rem; }
+@media (max-width: 640px) { .cal-grid { font-size: 0.7rem; } .cal-ev .tm { display: none; } }

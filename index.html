@@ -41,12 +41,26 @@
   <section id="results" class="card" hidden>
     <div class="toolbar">
       <h2>Assignments <span id="count"></span></h2>
+      <div class="seg">
+        <button type="button" data-view="calendar" class="active">Calendar</button>
+        <button type="button" data-view="list">List</button>
+      </div>
       <label><input type="checkbox" id="show-past"> Show past</label>
       <select id="course-filter"><option value="">All courses</option></select>
       <button id="refresh" type="button">Refresh</button>
       <button id="forget" type="button" class="ghost">Forget passphrase</button>
     </div>
-    <div id="list"></div>
+    <div id="calendar">
+      <div class="cal-nav">
+        <button type="button" id="cal-prev" class="ghost">‹</button>
+        <button type="button" id="cal-today" class="ghost">Today</button>
+        <button type="button" id="cal-next" class="ghost">›</button>
+        <span id="cal-range"></span>
+        <span class="hint">Assignments are placed at the start of that class on the day they're due.</span>
+      </div>
+      <div id="cal-grid" class="cal-grid"></div>
+    </div>
+    <div id="list" hidden></div>
   </section>
 </main>
 

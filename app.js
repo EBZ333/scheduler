@@ -194,7 +194,29 @@ function renderMapping() {
   });
 }
 
+/* ---------- Effective due time ---------- */
+
+// If the assignment's class meets on the due day, the real deadline is the start of that class.
+// Returns { due, meeting, moved } where moved = true when the time was adjusted.
+function effectiveDue(a) {
+  const block = blockForCourse(a.course);
+  if (!block) return { due: a.due, meeting: null, moved: false };
+  const meeting = scheduleForDay(dayKey(a.due)).find(s => s.block === block && !s.allDay);
+  if (!meeting) return { due: a.due, meeting: null, moved: false };
+  const moved = a.allDay || meeting.start.getTime() !== a.due.getTime();
+  return { due: meeting.start, meeting, moved };
+}
+
 /* ---------- Rendering ---------- */
+
+let view = localStorage.getItem('scheduler.view') || 'calendar';
+let weekStart = startOfWeek(new Date());
+
+function startOfWeek(d) {
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); // Monday
+  return x;
+}
 
 function fmtDay(d) {
   const diff = Math.round((dayKey(d) - dayKey(new Date())) / DAY);
@@ -228,6 +250,13 @@ function dayScheduleHtml(k) {
 }
 
 function render() {
+  document.querySelectorAll('.seg button').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+  $('#list').hidden = view !== 'list';
+  $('#calendar').hidden = view !== 'calendar';
+  if (view === 'calendar') renderCalendar(); else renderList();
+}
+
+function renderList() {
   const showPast = $('#show-past').checked;
   const course = $('#course-filter').value;
   const now = new Date();
@@ -262,8 +291,9 @@ function render() {
     html += `<div class="day"><h3 class="${isToday ? 'today' : ''}">${escapeHtml(fmtDay(new Date(k)))}</h3>${dayScheduleHtml(k)}`;
     if (!arr.length) html += '<p class="empty small">Nothing due.</p>';
     for (const a of arr) {
-      const past = a.due < now && !(a.allDay && k === todayKey);
-      const soon = !past && (a.due - now) < 2 * DAY;
+      const eff = effectiveDue(a);
+      const past = eff.due < now && !(a.allDay && !eff.moved && k === todayKey);
+      const soon = !past && (eff.due - now) < 2 * DAY;
       const cls = ['item', past ? 'past' : '', soon ? 'soon' : ''].join(' ');
       const title = a.url
         ? `<a href="${escapeHtml(a.url)}" target="_blank" rel="noopener">${escapeHtml(a.title)}</a>`
@@ -273,9 +303,8 @@ function render() {
       let meta = '';
       const block = blockForCourse(a.course);
       if (block) {
-        const meetsThatDay = scheduleForDay(k).find(s => s.block === block);
-        if (meetsThatDay) {
-          meta = `<span class="tag">class${meetsThatDay.allDay ? '' : ' at ' + fmtClock(meetsThatDay.start)}</span>`;
+        if (eff.meeting) {
+          meta = `<span class="tag">due at start of class</span>`;
         } else {
           const prev = [...schedule].reverse().find(s => s.block === block && s.start < a.due);
           if (prev) meta = `<span class="tag muted">no class that day · last class ${escapeHtml(prev.start.toLocaleDateString(undefined, { weekday: 'short' }))}</span>`;
@@ -285,7 +314,7 @@ function render() {
 
       html += `<div class="${cls}">
         <div><div class="title">${title}</div><div class="course">${escapeHtml(a.course)} ${meta}</div></div>
-        <div class="time">${escapeHtml(fmtTime(a))}</div>
+        <div class="time">${eff.moved ? escapeHtml(fmtClock(eff.due)) + `<span class="moved" title="Canvas due time">${escapeHtml(fmtTime(a))}</span>` : escapeHtml(fmtTime(a))}</div>
       </div>`;
     }
     html += '</div>';
@@ -293,7 +322,101 @@ function render() {
   list.innerHTML = html;
 }
 
+/* ---------- Calendar (week) view ---------- */
+
+function renderCalendar() {
+  const course = $('#course-filter').value;
+  const now = new Date();
+  const todayKey = dayKey(now);
+  const weekEnd = new Date(weekStart.getTime() + 7 * DAY);
+
+  const items = assignments
+    .filter(a => !course || a.course === course)
+    .filter(a => a.due >= weekStart && a.due < weekEnd)
+    .map(a => ({ a, eff: effectiveDue(a) }));
+  const sched = schedule.filter(s => s.start >= weekStart && s.start < weekEnd);
+  $('#count').textContent = `(${items.length} this week)`;
+
+  // Days: Mon–Fri, plus Sat/Sun only if something is on them.
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(weekStart.getTime() + i * DAY);
+    const k = dayKey(d);
+    const has = sched.some(s => dayKey(s.start) === k) || items.some(x => dayKey(x.eff.due) === k);
+    if (i < 5 || has) days.push({ d, k });
+  }
+
+  // Hour range from the timed content, defaulting to 8–16.
+  const timed = [...sched.filter(s => !s.allDay).map(s => [s.start, s.end || s.start]), ...items.filter(x => !(x.a.allDay && !x.eff.moved)).map(x => [x.eff.due, x.eff.due])];
+  let h0 = 8, h1 = 16;
+  for (const [s, e] of timed) { h0 = Math.min(h0, s.getHours()); h1 = Math.max(h1, e.getHours() + (e.getMinutes() > 0 ? 1 : 0)); }
+  const HOUR = 56; // px
+  const top = (d) => ((d.getHours() + d.getMinutes() / 60) - h0) * HOUR;
+
+  const fmtRange = `${weekStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – ${new Date(weekEnd - DAY).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
+  $('#cal-range').textContent = fmtRange;
+
+  let html = `<div class="cal-corner"></div>`;
+  for (const { d, k } of days) {
+    html += `<div class="cal-head ${k === todayKey ? 'today' : ''}">${d.toLocaleDateString(undefined, { weekday: 'short' })}<small>${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</small></div>`;
+  }
+  // All-day row: all-day schedule events + assignments that couldn't be attached to a class and have no time.
+  html += `<div class="cal-corner"></div>`;
+  for (const { k } of days) {
+    html += `<div class="cal-allday">`;
+    for (const s of sched.filter(s => s.allDay && dayKey(s.start) === k)) html += `<span class="chip">${escapeHtml(classLabel(s.title))}</span>`;
+    for (const x of items.filter(x => dayKey(x.eff.due) === k && x.a.allDay && !x.eff.moved)) html += dueHtml(x, now);
+    html += `</div>`;
+  }
+  // Time gutter
+  html += `<div class="cal-times" style="height:${(h1 - h0) * HOUR}px">`;
+  for (let h = h0; h <= h1; h++) html += `<div style="top:${(h - h0) * HOUR}px">${new Date(2000, 0, 1, h).toLocaleTimeString(undefined, { hour: 'numeric' })}</div>`;
+  html += `</div>`;
+  // Day columns
+  for (const { k } of days) {
+    html += `<div class="cal-col ${k === todayKey ? 'today' : ''}" style="height:${(h1 - h0) * HOUR}px">`;
+    for (const s of sched.filter(s => !s.allDay && dayKey(s.start) === k)) {
+      const end = s.end || new Date(s.start.getTime() + 45 * 60000);
+      const mapped = s.block && blockMap[s.block];
+      const dues = items.filter(x => x.eff.meeting === s);
+      html += `<div class="cal-ev klass ${mapped ? '' : 'unmapped'}" style="top:${top(s.start)}px;height:${Math.max(22, top(end) - top(s.start) - 2)}px" title="${escapeHtml(s.title)}">
+        <div class="t">${escapeHtml(classLabel(s.title))}</div>
+        <div class="tm">${fmtClock(s.start)}–${fmtClock(end)}</div>
+        ${dues.map(x => dueHtml(x, now)).join('')}
+      </div>`;
+    }
+    // Timed assignments not attached to a class meeting.
+    for (const x of items.filter(x => dayKey(x.eff.due) === k && !x.eff.meeting && !x.a.allDay)) {
+      html += dueHtml(x, now, `style="top:${top(x.eff.due)}px"`);
+    }
+    if (k === todayKey && now.getHours() >= h0 && now.getHours() < h1) html += `<div class="cal-now" style="top:${top(now)}px"></div>`;
+    html += `</div>`;
+  }
+  const grid = $('#cal-grid');
+  grid.style.setProperty('--days', days.length);
+  grid.style.setProperty('--hour', HOUR + 'px');
+  grid.innerHTML = html;
+}
+
+function dueHtml(x, now, extraAttr = '') {
+  const { a, eff } = x;
+  const past = eff.due < now && !(a.allDay && !eff.moved && dayKey(a.due) === dayKey(now));
+  const loose = extraAttr ? ' loose' : '';
+  const tip = `${a.title} · ${a.course}` + (eff.moved ? ` · Canvas says ${fmtTime(a)}` : '');
+  const inner = `${eff.meeting || a.allDay ? '' : fmtClock(eff.due) + ' '}${escapeHtml(a.title)}`;
+  return a.url
+    ? `<a class="cal-due${past ? ' past' : ''}${loose}" ${extraAttr} href="${escapeHtml(a.url)}" target="_blank" rel="noopener" title="${escapeHtml(tip)}">${inner}</a>`
+    : `<span class="cal-due${past ? ' past' : ''}${loose}" ${extraAttr} title="${escapeHtml(tip)}">${inner}</span>`;
+}
+
 /* ---------- Wiring ---------- */
+
+document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
+  view = b.dataset.view; localStorage.setItem('scheduler.view', view); render();
+}));
+$('#cal-prev').addEventListener('click', () => { weekStart = new Date(weekStart.getTime() - 7 * DAY); render(); });
+$('#cal-next').addEventListener('click', () => { weekStart = new Date(weekStart.getTime() + 7 * DAY); render(); });
+$('#cal-today').addEventListener('click', () => { weekStart = startOfWeek(new Date()); render(); });
 
 $('#unlock-form').addEventListener('submit', (e) => {
   e.preventDefault();
