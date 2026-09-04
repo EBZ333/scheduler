@@ -226,3 +226,48 @@ main { max-width: 1400px; margin: 0 auto; padding: 1.25rem 1.25rem 6rem; }
   .tl { margin-left: 4.4rem; }
   .tl-row .when { left: -4.5rem; width: 3.9rem; }
 }
+
+/* ---------- estimates, exams, colors, plan ---------- */
+.est { display: inline-flex; align-items: baseline; gap: 1px; margin-left: 0.5rem; font-size: 0.75rem; color: var(--ink-3); font-weight: 500; }
+.est input { width: 2.6em; text-align: right; background: transparent; border: 0; border-bottom: 1px solid var(--ink-3); color: var(--ink); font: inherit; font-weight: 700; padding: 0; outline: none; }
+.est.guess input { color: var(--ink-3); border-bottom-style: dotted; }
+.est input:focus { border-bottom-color: var(--ink); color: var(--ink); }
+.exam-mark { display: inline-block; background: var(--accent); color: var(--accent-ink); font-size: 0.65rem; padding: 0 0.35rem; margin-right: 0.4rem; vertical-align: middle; }
+.cal-due.exam { outline: 2px solid var(--accent); outline-offset: -2px; background: var(--ink); color: var(--bg); }
+.exams { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0 0 0.9rem; }
+.exam-chip { --c: var(--ink); font-size: 0.8rem; padding: 0.25rem 0.6rem; border: 1px solid var(--hair); border-left: 4px solid var(--c); font-weight: 500; }
+.exam-chip b { font-weight: 700; }
+.hint .warn, .tl-row.over .what, .tl-row.over .sum { color: var(--accent); }
+.tl-row.over::before { background: var(--accent); border-color: var(--accent); }
+.tl-row.klass { --c: var(--ink); }
+.tl-row.klass::before { background: var(--c); border-color: var(--c); }
+.tl-row .sheet { display: block; color: var(--ink-2); font-weight: 500; font-size: 0.8rem; margin-top: 0.15rem; }
+.work .due b { color: var(--ink); }
+.item .course, .work .c, .due-list .c { --c: var(--ink-3); }
+.item .course[style], .work .c[style], .due-list .c[style] { color: var(--c); }
+.chip { --c: var(--hair); border-color: var(--c); }
+.cal-ev.klass { --c: var(--ink); border-left-color: var(--c); background: color-mix(in srgb, var(--c) 14%, var(--fill-2)); }
+.map-row { grid-template-columns: minmax(120px, 1fr) 1fr 110px 34px; }
+.map-row input[type=color] { width: 28px; height: 22px; padding: 0; border: 1px solid var(--hair); background: transparent; cursor: pointer; }
+.map-row input[type=color].unset { opacity: 0.35; }
+.map-row.map-head span:last-child { text-align: left; }
+
+/* weeksheets */
+.sheets { margin-top: 0.75rem; }
+.sheet-row { display: flex; gap: 0.6rem; align-items: center; margin: 0.4rem 0; flex-wrap: wrap; }
+.sheet-row select { flex: 1; min-width: 160px; }
+#sheet-text { width: 100%; font: 500 0.8rem/1.4 ui-monospace, Menlo, monospace; background: var(--bg); color: var(--ink); border: 1px solid var(--hair); padding: 0.4rem; resize: vertical; }
+
+/* edit panel */
+.edit[hidden] { display: none; }
+.edit { position: fixed; left: 1.25rem; bottom: 3.6rem; z-index: 6; width: min(360px, 90vw); background: var(--bg); border: 2px solid var(--ink); padding: 0.8rem; display: grid; gap: 0.5rem; }
+.edit input[type=text] { width: 100%; background: transparent; border: 0; border-bottom: 2px solid var(--ink); padding: 0.3rem 0; outline: none; font-size: 1rem; }
+.edit-row { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
+.edit input[type=date], .edit input[type=time], .edit input[type=number] { background: transparent; border: 0; border-bottom: 1px solid var(--ink); color: var(--ink); font: inherit; padding: 0.2rem 0; outline: none; }
+.edit input[type=number] { width: 4em; }
+.edit .dur { display: inline-flex; align-items: baseline; gap: 2px; color: var(--ink-3); font-size: 0.85rem; }
+.wd { display: flex; gap: 0.35rem; }
+.wd label { width: 26px; height: 26px; display: grid; place-items: center; border: 1px solid var(--hair); cursor: pointer; font-size: 0.8rem; position: relative; }
+.wd input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.wd label:has(input:checked) { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.tl-row.custom, .item.custom, .cal-ev.custom { cursor: pointer; }
