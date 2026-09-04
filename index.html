@@ -4,78 +4,91 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Scheduler</title>
-<link rel="stylesheet" href="style.css?v=7">
+<link rel="stylesheet" href="style.css?v=8">
 </head>
 <body>
-<header>
-  <h1>Scheduler</h1>
-  <p class="sub">Canvas assignments lined up against your block schedule.</p>
+
+<header class="bar">
+  <div class="brand">Scheduler</div>
+  <nav class="seg" aria-label="View">
+    <button type="button" data-view="plan" class="active">Free time</button>
+    <button type="button" data-view="calendar">Calendar</button>
+    <button type="button" data-view="list">List</button>
+  </nav>
+  <div class="controls">
+    <select id="course-filter" aria-label="Course"><option value="">All courses</option></select>
+    <label class="check"><input type="checkbox" id="show-past"> Past</label>
+    <button id="refresh" type="button" class="text" title="Re-fetch data">Refresh</button>
+    <button id="settings-toggle" type="button" class="text" aria-expanded="false">Settings</button>
+  </div>
 </header>
 
-<main>
-  <section id="unlock" class="card">
-    <h2>Unlock your data</h2>
-    <p>Feeds are fetched hourly by GitHub Actions and stored encrypted. Enter the passphrase you set as the
-      <code>DATA_PASSPHRASE</code> secret. It is remembered in this browser.</p>
-    <form id="unlock-form">
-      <input id="passphrase" type="password" placeholder="Passphrase" autocomplete="current-password" required>
-      <button type="submit">Unlock</button>
-    </form>
-    <p id="status" class="status"></p>
-    <p id="meta" class="hint"></p>
+<aside id="settings" class="panel" hidden>
+  <div class="panel-inner">
+    <section>
+      <h2>Data</h2>
+      <p class="hint">Feeds are fetched hourly by GitHub Actions and stored encrypted. Enter the passphrase set as the <code>DATA_PASSPHRASE</code> secret. It stays in this browser.</p>
+      <form id="unlock-form" class="row">
+        <input id="passphrase" type="password" placeholder="Passphrase" autocomplete="current-password" required>
+        <button type="submit">Unlock</button>
+      </form>
+      <p id="status" class="status"></p>
+      <p id="meta" class="hint"></p>
+      <details>
+        <summary>Upload .ics files manually</summary>
+        <label class="file-row"><span>Canvas</span><input id="feed-file" type="file" accept=".ics,text/calendar"></label>
+        <label class="file-row"><span>Schedule</span><input id="sched-file" type="file" accept=".ics,text/calendar"></label>
+      </details>
+      <p><button id="forget" type="button" class="text danger">Forget passphrase and cached data</button></p>
+    </section>
 
-    <details>
-      <summary>Manual: upload .ics files instead</summary>
-      <p class="hint">Open the feed URL in a new tab, save the file, then choose it here.</p>
-      <label class="map-row"><span>Canvas</span><input id="feed-file" type="file" accept=".ics,text/calendar"></label>
-      <label class="map-row"><span>Schedule</span><input id="sched-file" type="file" accept=".ics,text/calendar"></label>
-    </details>
-  </section>
+    <section id="mapping" hidden>
+      <h2>Classes</h2>
+      <p class="hint">Schedule class → Canvas course. Guessed from names; fix any that are wrong. Leave meetings unmatched.</p>
+      <div id="mapping-rows"></div>
+    </section>
+  </div>
+</aside>
 
-  <section id="mapping" class="card" hidden>
-    <h2>Match schedule classes to Canvas courses</h2>
-    <p class="hint">Guessed from the names; fix any that are wrong. Leave assemblies and meetings unmatched, they still show on the day.</p>
-    <div id="mapping-rows"></div>
-  </section>
+<main id="results" hidden>
+  <div id="plan" hidden>
+    <div class="subbar">
+      <div class="nav">
+        <button type="button" id="plan-prev" aria-label="Previous day">‹</button>
+        <button type="button" id="plan-today">Today</button>
+        <button type="button" id="plan-next" aria-label="Next day">›</button>
+      </div>
+      <h1 id="plan-date"></h1>
+      <span id="count" class="count"></span>
+    </div>
+    <div id="plan-body"></div>
+  </div>
 
-  <section id="results" class="card" hidden>
-    <div class="toolbar">
-      <h2>Assignments <span id="count"></span></h2>
-      <div class="seg">
-        <button type="button" data-view="plan" class="active">Free time</button>
-        <button type="button" data-view="calendar">Calendar</button>
-        <button type="button" data-view="list">List</button>
+  <div id="calendar" hidden>
+    <div class="subbar">
+      <div class="nav">
+        <button type="button" id="cal-prev" aria-label="Previous week">‹</button>
+        <button type="button" id="cal-today">Today</button>
+        <button type="button" id="cal-next" aria-label="Next week">›</button>
       </div>
-      <label><input type="checkbox" id="show-past"> Show past</label>
-      <select id="course-filter"><option value="">All courses</option></select>
-      <button id="refresh" type="button">Refresh</button>
-      <button id="forget" type="button" class="ghost">Forget passphrase</button>
+      <h1 id="cal-range"></h1>
+      <span id="cal-count" class="count"></span>
     </div>
-    <div id="plan" hidden>
-      <div class="cal-nav">
-        <button type="button" id="plan-prev" class="ghost">‹</button>
-        <button type="button" id="plan-today" class="ghost">Today</button>
-        <button type="button" id="plan-next" class="ghost">›</button>
-        <span id="plan-date"></span>
-        <span class="hint">Click a row to expand. Free time has a 5-minute buffer around every class and lunch (11:50–12:10).</span>
-      </div>
-      <div id="plan-body"></div>
-    </div>
-    <div id="calendar">
-      <div class="cal-nav">
-        <button type="button" id="cal-prev" class="ghost">‹</button>
-        <button type="button" id="cal-today" class="ghost">Today</button>
-        <button type="button" id="cal-next" class="ghost">›</button>
-        <span id="cal-range"></span>
-        <span class="hint">Assignments are placed at the start of that class on the day they're due.</span>
-      </div>
-      <div id="cal-grid" class="cal-grid"></div>
-    </div>
-    <div id="list" hidden></div>
-  </section>
+    <div id="cal-grid" class="cal-grid"></div>
+  </div>
+
+  <div id="list-view" hidden>
+    <div class="subbar"><h1>Upcoming</h1><span id="list-count" class="count"></span></div>
+    <div id="list"></div>
+  </div>
 </main>
 
-<script src="ics.js?v=7"></script>
-<script src="app.js?v=7"></script>
+<div id="empty-state" class="empty-state" hidden>
+  <h1>Nothing loaded.</h1>
+  <p>Open <button type="button" class="text inline" data-open-settings>Settings</button> and enter your passphrase.</p>
+</div>
+
+<script src="ics.js?v=8"></script>
+<script src="app.js?v=8"></script>
 </body>
 </html>

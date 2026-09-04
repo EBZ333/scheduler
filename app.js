@@ -59,8 +59,10 @@ async function unlock(passphrase) {
     let msgs = [];
     if (s) { loadSchedule(await decrypt(s, passphrase)); msgs.push(`${schedule.length} schedule events`); }
     if (c) { loadAssignments(await decrypt(c, passphrase)); msgs.push(`${assignments.length} Canvas items`); }
+    const firstUnlock = !localStorage.getItem(KEYS.pass);
     localStorage.setItem(KEYS.pass, passphrase);
     setStatus('#status', 'Unlocked: ' + msgs.join(', ') + '.');
+    if (firstUnlock) toggleSettings(false);
   } catch (e) {
     const bad = e.name === 'OperationError';
     setStatus('#status', bad ? 'Wrong passphrase.' : `Couldn't load data (${e.message}).`, true);
@@ -83,7 +85,7 @@ function loadAssignments(text) {
   populateCourses();
   renderMapping();
   render();
-  $('#results').hidden = false;
+  updateEmptyState();
 }
 
 function courses() {
@@ -253,7 +255,7 @@ function dayScheduleHtml(k) {
 
 function render() {
   document.querySelectorAll('.seg button').forEach(b => b.classList.toggle('active', b.dataset.view === view));
-  $('#list').hidden = view !== 'list';
+  $('#list-view').hidden = view !== 'list';
   $('#calendar').hidden = view !== 'calendar';
   $('#plan').hidden = view !== 'plan';
   if (view === 'calendar') renderCalendar(); else if (view === 'plan') renderPlan(); else renderList();
@@ -270,7 +272,7 @@ function renderList() {
     (!course || a.course === course) &&
     (showPast || dayKey(a.due) >= todayKey)
   );
-  $('#count').textContent = `(${items.length})`;
+  $('#list-count').textContent = `${items.length} items`;
 
   const groups = new Map();
   for (const a of items) {
@@ -417,7 +419,7 @@ function renderPlan() {
   const slots = freeSlots(evs);
   const dues = dueOn(k);
   $('#plan-date').textContent = fmtDay(planDay);
-  $('#count').textContent = `(${dues.length} due ${k === todayKey ? 'today' : 'this day'})`;
+  $('#count').textContent = `${dues.length} due`;
 
   const body = $('#plan-body');
   if (!evs.length) {
@@ -478,7 +480,7 @@ function renderCalendar() {
     .filter(a => a.due >= weekStart && a.due < weekEnd)
     .map(a => ({ a, eff: effectiveDue(a) }));
   const sched = schedule.filter(s => s.start >= weekStart && s.start < weekEnd);
-  $('#count').textContent = `(${items.length} this week)`;
+  $('#cal-count').textContent = `${items.length} due this week`;
 
   // Days: Mon–Fri, plus Sat/Sun only if something is on them.
   const days = [];
@@ -557,9 +559,24 @@ function dueHtml(x, now, extraAttr = '') {
 
 /* ---------- Wiring ---------- */
 
+function updateEmptyState() {
+  const has = assignments.length || schedule.length;
+  $('#results').hidden = !has;
+  $('#empty-state').hidden = !!has;
+}
+function toggleSettings(open) {
+  const p = $('#settings');
+  const willOpen = open === undefined ? p.hidden : open;
+  p.hidden = !willOpen;
+  $('#settings-toggle').setAttribute('aria-expanded', String(willOpen));
+  if (willOpen && !localStorage.getItem(KEYS.pass)) $('#passphrase').focus();
+}
+
 // Tolerate a missing element (e.g. a stale cached index.html) instead of aborting all wiring.
 function on(sel, evt, fn) { document.querySelectorAll(sel).forEach(el => el.addEventListener(evt, fn)); }
 
+on('#settings-toggle', 'click', () => toggleSettings());
+on('[data-open-settings]', 'click', () => toggleSettings(true));
 on('.seg button', 'click', (e) => { view = e.currentTarget.dataset.view; localStorage.setItem('scheduler.view', view); render(); });
 on('#cal-prev', 'click', () => { weekStart = new Date(weekStart.getTime() - 7 * DAY); render(); });
 on('#cal-next', 'click', () => { weekStart = new Date(weekStart.getTime() + 7 * DAY); render(); });
@@ -590,7 +607,7 @@ on('#refresh', 'click', () => {
 on('#forget', 'click', () => {
   Object.values(KEYS).forEach(k => localStorage.removeItem(k));
   assignments = []; schedule = []; blockMap = {};
-  $('#results').hidden = true;
+  updateEmptyState();
   $('#mapping').hidden = true;
   $('#passphrase').value = '';
   setStatus('#status', 'Forgot passphrase and cached data.');
@@ -617,5 +634,7 @@ setInterval(() => { if (!document.hidden && assignments.length) render(); }, 60 
   if (c2) { try { loadSchedule(c2.text); } catch (_) {} }
   if (c1) { try { loadAssignments(c1.text); } catch (_) {} }
   showMeta();
+  updateEmptyState();
   if (p) { $('#passphrase').value = p; unlock(p); }
+  else if (!c1 && !c2) toggleSettings(true);
 })();
