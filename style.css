@@ -71,9 +71,10 @@ input[type=checkbox] { accent-color: var(--ink); }
 #refresh { padding: 0.4rem 0.9rem; font-size: 0.85rem; }
 
 /* ---------- quick add ---------- */
-.quick { flex: 1; max-width: 420px; }
-.quick input { width: 100%; background: transparent; border: 0; border-bottom: 2px solid var(--hair); padding: 0.35rem 0; outline: none; font-size: 0.9rem; }
-.quick input:focus { border-bottom-color: var(--ink); }
+.quick { position: fixed; left: 1.25rem; bottom: 1rem; z-index: 5; width: min(420px, 50vw); }
+.quick input { width: 100%; background: var(--bg); border: 0; border-bottom: 2px solid var(--ink); padding: 0.4rem 0; outline: none; font-size: 1.2rem; letter-spacing: -0.02em; }
+.quick input:focus { border-bottom-width: 3px; }
+.quick input::placeholder { color: var(--ink-3); font-weight: 700; }
 .quick input::placeholder { color: var(--ink-3); font-weight: 500; }
 .quick input.shake { animation: shake 0.4s; }
 @keyframes shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
@@ -205,6 +206,8 @@ main { max-width: 1400px; margin: 0 auto; padding: 1.25rem 1.25rem 6rem; }
 @media (max-width: 720px) {
   .bar { gap: 0.9rem; padding: 0 0.9rem; }
   .corner { right: 0.9rem; bottom: 0.75rem; }
+  .quick { left: 0.9rem; bottom: 0.75rem; width: 45vw; }
+  .quick input { font-size: 1rem; }
   .clock .t { font-size: 1.6rem; }
   .clock .d { font-size: 0.5rem; }
   .controls { gap: 0.5rem; }

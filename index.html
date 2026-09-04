@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Scheduler</title>
-<link rel="stylesheet" href="style.css?v=12">
+<link rel="stylesheet" href="style.css?v=13">
 </head>
 <body>
 
@@ -14,9 +14,6 @@
     <button type="button" data-view="calendar">Calendar</button>
     <button type="button" data-view="list">List</button>
   </nav>
-  <form id="quick" class="quick" autocomplete="off">
-    <input id="quick-input" type="text" placeholder="add: calc test study saturday 4pm" aria-label="Quick add">
-  </form>
   <div class="controls">
     <button id="refresh" type="button" title="Re-fetch data">refresh</button>
     <button id="settings-toggle" type="button" class="text" aria-expanded="false">Settings</button>
@@ -51,7 +48,10 @@
           <option value="dots">dots</option>
           <option value="grid">grid</option>
           <option value="constellation">constellation</option>
-          <option value="ripple">ripple</option>
+          <option value="water">water</option>
+          <option value="hair">hair</option>
+          <option value="smoke">smoke</option>
+          <option value="soccer">soccer</option>
         </select>
       </div>
     </section>
@@ -105,6 +105,10 @@
   </div>
 </main>
 
+<form id="quick" class="quick" autocomplete="off">
+  <input id="quick-input" type="text" placeholder="add" aria-label="Quick add">
+</form>
+
 <div class="corner">
   <div class="brand">scheduler</div>
   <div id="clock" class="clock"><span class="t"></span><span class="d"></span></div>
@@ -115,8 +119,8 @@
   <p>Open <button type="button" class="text inline" data-open-settings>Settings</button> and enter your passphrase.</p>
 </div>
 
-<script src="bg.js?v=12"></script>
-<script src="ics.js?v=12"></script>
-<script src="app.js?v=12"></script>
+<script src="bg.js?v=13"></script>
+<script src="ics.js?v=13"></script>
+<script src="app.js?v=13"></script>
 </body>
 </html>

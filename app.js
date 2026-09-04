@@ -706,7 +706,7 @@ on('#quick', 'submit', (e) => {
   e.preventDefault();
   const inp = $('#quick-input');
   const ev = quickAdd(inp.value);
-  if (ev) { inp.value = ''; inp.placeholder = `added: ${ev.title} · ${fmtDay(ev.start)} ${fmtClock(ev.start)}`.toLowerCase(); setTimeout(() => { inp.placeholder = 'add: calc test study saturday 4pm'; }, 4000); }
+  if (ev) { inp.value = ''; inp.placeholder = `added · ${fmtDay(ev.start)} ${fmtClock(ev.start)}`.toLowerCase(); setTimeout(() => { inp.placeholder = 'add'; }, 4000); }
   else { inp.classList.add('shake'); setTimeout(() => inp.classList.remove('shake'), 400); }
 });
 document.addEventListener('click', (e) => { const b = e.target.closest('[data-del]'); if (b) { e.preventDefault(); removeCustom(b.dataset.del); } });
