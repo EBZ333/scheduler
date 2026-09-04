@@ -1,5 +1,5 @@
 // Reactive monochrome backgrounds on a fixed full-screen canvas behind the page.
-// Styles: none | dots | constellation | water | smoke | boids | soccer | pong | breakout | snake
+// Styles: none | dots | constellation | water | smoke | boids | soccer | pong | cars
 (function (global) {
   const canvas = document.createElement('canvas');
   canvas.id = 'bg';
@@ -28,7 +28,7 @@
   addEventListener('resize', resize);
   addEventListener('pointermove', (e) => { if (!mouse.active) { prev.x = e.clientX; prev.y = e.clientY; eased.x = e.clientX; eased.y = e.clientY; } mouse.x = e.clientX; mouse.y = e.clientY; mouse.active = true; });
   addEventListener('pointerleave', () => { mouse.active = false; });
-  addEventListener('pointerdown', (e) => { if (style === 'water') drop(e.clientX, e.clientY, 6); if (style === 'breakout' && state.stuck) state.stuck = false; });
+  addEventListener('pointerdown', (e) => { if (style === 'water') drop(e.clientX, e.clientY, 6); });
   document.addEventListener('visibilitychange', () => { if (document.hidden) stop(); else start(); });
 
   /* ================= dots ================= */
@@ -163,7 +163,18 @@
   // Fixed sphere patch directions (icosahedron vertices) rotated by the ball's rolling.
   const PHI = (1 + Math.sqrt(5)) / 2;
   const PATCHES = [[0, 1, PHI], [0, -1, PHI], [0, 1, -PHI], [0, -1, -PHI], [1, PHI, 0], [-1, PHI, 0], [1, -PHI, 0], [-1, -PHI, 0], [PHI, 0, 1], [-PHI, 0, 1], [PHI, 0, -1], [-PHI, 0, -1]]
-    .map(v => { const n = Math.hypot(...v); return v.map(c => c / n); });
+    .map(v => { const n = Math.hypot(...v); return v.map(c => c / n); })
+    .map(n => {
+      // A pentagon of points on the sphere around normal n, fixed in the ball's own frame.
+      const up = Math.abs(n[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+      let t = [up[1] * n[2] - up[2] * n[1], up[2] * n[0] - up[0] * n[2], up[0] * n[1] - up[1] * n[0]];
+      const tl = Math.hypot(...t); t = t.map(c => c / tl);
+      const u = [n[1] * t[2] - n[2] * t[1], n[2] * t[0] - n[0] * t[2], n[0] * t[1] - n[1] * t[0]];
+      const s = 0.36, cs = Math.cos(s), ss = Math.sin(s), pts = [];
+      for (let k = 0; k < 5; k++) { const a = k * Math.PI * 2 / 5; pts.push([0, 1, 2].map(i => n[i] * cs + (t[i] * Math.cos(a) + u[i] * Math.sin(a)) * ss)); }
+      return { n, pts };
+    });
+  function mul(M, v) { return [M[0][0] * v[0] + M[0][1] * v[1] + M[0][2] * v[2], M[1][0] * v[0] + M[1][1] * v[1] + M[1][2] * v[2], M[2][0] * v[0] + M[2][1] * v[1] + M[2][2] * v[2]]; }
   function rotAxis(M, ax, ay, az, ang) {   // M = R(axis, ang) * M   (M is a 3x3 array of rows)
     const c = Math.cos(ang), s = Math.sin(ang), t = 1 - c;
     const R = [[t * ax * ax + c, t * ax * ay - s * az, t * ax * az + s * ay], [t * ax * ay + s * az, t * ay * ay + c, t * ay * az - s * ax], [t * ax * az - s * ay, t * ay * az + s * ax, t * az * az + c]];
@@ -219,11 +230,24 @@
     ctx.beginPath(); ctx.moveTo(W / 2, 0); ctx.lineTo(W / 2, H); ctx.stroke();
     ctx.beginPath(); ctx.arc(W / 2, H / 2, 70, 0, Math.PI * 2); ctx.stroke();
     ctx.globalAlpha = 1;
-    // goals: flat hatched boxes with a drop shadow
+    // ball: flat disc with a drop shadow and a rolling patch texture (drawn before the nets so it goes inside them)
+    withShadow(() => { ctx.fillStyle = PAPER; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.fill(); }, 12, 4, 6, dark ? 0.8 : 0.35);
+    ctx.save(); ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.clip();
+    ctx.fillStyle = INK;
+    for (const p of PATCHES) {
+      const n = mul(b.M, p.n);
+      if (n[2] <= 0.02) continue;
+      ctx.beginPath();
+      p.pts.forEach((q, k) => { const v = mul(b.M, q); const x = b.x + v[0] * b.r, y = b.y + v[1] * b.r; k ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+    ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.stroke();
+    // goals: flat hatched boxes with a drop shadow, drawn over the ball
     for (const gx of [0, W - goalD]) {
-      withShadow(() => { ctx.fillStyle = PAPER; ctx.fillRect(gx, top, goalD, goalH); }, 18, 6, 8, dark ? 0.8 : 0.35);
+      withShadow(() => { ctx.globalAlpha = 0.55; ctx.fillStyle = PAPER; ctx.fillRect(gx, top, goalD, goalH); ctx.globalAlpha = 1; }, 18, 6, 8, dark ? 0.8 : 0.35);
       ctx.save(); ctx.beginPath(); ctx.rect(gx, top, goalD, goalH); ctx.clip();
-      ctx.strokeStyle = INK; ctx.lineWidth = 1; ctx.globalAlpha = 0.45;
+      ctx.strokeStyle = INK; ctx.lineWidth = 1; ctx.globalAlpha = 0.5;
       for (let y = top - goalD; y < top + goalH + goalD; y += 7) { ctx.beginPath(); ctx.moveTo(gx, y); ctx.lineTo(gx + goalD, y + goalD); ctx.stroke(); ctx.beginPath(); ctx.moveTo(gx, y + goalD); ctx.lineTo(gx + goalD, y); ctx.stroke(); }
       ctx.restore();
       ctx.globalAlpha = 0.9; ctx.lineWidth = 3; ctx.strokeStyle = INK;
@@ -233,21 +257,6 @@
       ctx.stroke();
       ctx.globalAlpha = 1;
     }
-    // ball: flat disc with a drop shadow and a rolling patch texture
-    withShadow(() => { ctx.fillStyle = PAPER; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.fill(); }, 12, 4, 6, dark ? 0.8 : 0.35);
-    ctx.save(); ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.clip();
-    ctx.fillStyle = INK;
-    for (const p of PATCHES) {
-      const M = b.M, x = M[0][0] * p[0] + M[0][1] * p[1] + M[0][2] * p[2], y = M[1][0] * p[0] + M[1][1] * p[1] + M[1][2] * p[2], z = M[2][0] * p[0] + M[2][1] * p[1] + M[2][2] * p[2];
-      if (z <= 0.05) continue;
-      // pentagon patch facing the viewer, foreshortened toward the rim
-      const cx = b.x + x * b.r, cy = b.y + y * b.r, s = b.r * 0.34, ang = Math.atan2(y, x);
-      ctx.save(); ctx.translate(cx, cy); ctx.rotate(ang); ctx.scale(z, 1);
-      ctx.beginPath(); for (let k = 0; k < 5; k++) { const t = k * Math.PI * 2 / 5; k ? ctx.lineTo(Math.cos(t) * s, Math.sin(t) * s) : ctx.moveTo(Math.cos(t) * s, Math.sin(t) * s); } ctx.closePath(); ctx.fill();
-      ctx.restore();
-    }
-    ctx.restore();
-    ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.stroke();
     scoreText(`${state.score[0]} – ${state.score[1]}`);
   }
   function scoreText(txt) {
@@ -281,71 +290,68 @@
     scoreText(`${state.score[0]} – ${state.score[1]}`);
   }
 
-  /* ================= breakout ================= */
-  function initBreakout() {
-    const cols = Math.max(6, Math.floor(W / 90)), rows = 5, bw = (W - 40) / cols, bh = 18;
-    state.bricks = []; for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) state.bricks.push({ x: 20 + c * bw, y: 80 + r * (bh + 6), w: bw - 6, h: bh });
-    state.ball = { x: W / 2, y: H - 60, vx: 0, vy: 0, r: 7 }; state.stuck = true; state.score = 0; state.flash = 0;
+  /* ================= cars (top-down: drive toward the cursor, knock over cones) ================= */
+  function initCars() {
+    state.car = { x: W / 2, y: H / 2, a: 0, v: 0, drift: 0 };
+    state.marks = [];
+    state.cones = Array.from({ length: 9 }, () => ({ x: 60 + Math.random() * (W - 120), y: 90 + Math.random() * (H - 160), vx: 0, vy: 0, rot: 0, vr: 0, down: false }));
+    state.cars = Array.from({ length: 3 }, (_, i) => ({ x: Math.random() * W, y: 100 + Math.random() * (H - 200), a: Math.random() * Math.PI * 2, v: 2.2 + i * 0.4, t: Math.random() * 100 }));
   }
-  function drawBreakout() {
-    const b = state.ball, pw = 120, ph = 10, py = H - 40, INK = ink();
-    const px = Math.max(pw / 2, Math.min(W - pw / 2, mouse.active ? eased.x : W / 2));
-    if (state.stuck) { b.x = px; b.y = py - b.r - 1; if (mouse.active && Math.abs(mouse.x - prev.x) > 6) { state.stuck = false; b.vx = (mouse.x - prev.x) * 0.3; b.vy = -7; } }
-    else {
-      b.x += b.vx; b.y += b.vy;
-      if (b.x < b.r || b.x > W - b.r) { b.vx = -b.vx; b.x = Math.max(b.r, Math.min(W - b.r, b.x)); }
-      if (b.y < 60 + b.r) { b.vy = Math.abs(b.vy); }
-      if (b.vy > 0 && b.y + b.r >= py && b.y + b.r <= py + ph + 8 && Math.abs(b.x - px) < pw / 2 + b.r) { b.vy = -Math.abs(b.vy); b.vx += (b.x - px) * 0.12; b.y = py - b.r; }
-      if (b.y > H + 30) { state.stuck = true; b.vx = b.vy = 0; }
-      for (const br of state.bricks) {
-        if (br.dead) continue;
-        if (b.x + b.r > br.x && b.x - b.r < br.x + br.w && b.y + b.r > br.y && b.y - b.r < br.y + br.h) {
-          br.dead = true; state.score++; state.flash = 20;
-          const ox = Math.min(b.x + b.r - br.x, br.x + br.w - b.x + b.r), oy = Math.min(b.y + b.r - br.y, br.y + br.h - b.y + b.r);
-          if (ox < oy) b.vx = -b.vx; else b.vy = -b.vy;
-          break;
-        }
-      }
-      const sp = Math.hypot(b.vx, b.vy); if (sp > 12) { b.vx *= 12 / sp; b.vy *= 12 / sp; } if (sp < 5) { b.vx *= 5 / (sp || 1); b.vy *= 5 / (sp || 1); }
-      if (state.bricks.every(x => x.dead)) { state.bricks.forEach(x => x.dead = false); }
+  function drawCars() {
+    const c = state.car, INK = ink(), PAPER = paper(), dark = isDark();
+    // --- steering physics: turn toward the cursor, accelerate when far, brake when near
+    if (mouse.active) {
+      const dx = eased.x - c.x, dy = eased.y - c.y, dist = Math.hypot(dx, dy), ta = Math.atan2(dy, dx);
+      const diff = Math.atan2(Math.sin(ta - c.a), Math.cos(ta - c.a));
+      const steer = Math.max(-0.06, Math.min(0.06, diff * 0.25)) * Math.min(1, c.v / 2);
+      c.a += steer;
+      const want = Math.min(9, dist / 25);
+      c.v += (want - c.v) * (want > c.v ? 0.05 : 0.12);
+      c.drift = c.drift * 0.85 + Math.abs(steer) * c.v * 0.6;
+    } else c.v *= 0.96;
+    c.x += Math.cos(c.a) * c.v; c.y += Math.sin(c.a) * c.v;
+    if (c.x < 20) { c.x = 20; c.v *= 0.5; } if (c.x > W - 20) { c.x = W - 20; c.v *= 0.5; } if (c.y < 70) { c.y = 70; c.v *= 0.5; } if (c.y > H - 20) { c.y = H - 20; c.v *= 0.5; }
+    // tire marks when cornering hard
+    if (c.drift > 1.6 && c.v > 3) for (const s of [-1, 1]) state.marks.push({ x: c.x - Math.cos(c.a) * 12 + Math.cos(c.a + Math.PI / 2) * 8 * s, y: c.y - Math.sin(c.a) * 12 + Math.sin(c.a + Math.PI / 2) * 8 * s, life: 1 });
+    if (state.marks.length > 1500) state.marks.splice(0, state.marks.length - 1500);
+    // --- traffic: wander, avoid the player's car
+    for (const o of state.cars) {
+      o.t += 0.02; o.a += Math.sin(o.t) * 0.02;
+      const dx = o.x - c.x, dy = o.y - c.y, d = Math.hypot(dx, dy);
+      if (d < 110) { const away = Math.atan2(dy, dx); o.a += Math.atan2(Math.sin(away - o.a), Math.cos(away - o.a)) * 0.08; }
+      o.x += Math.cos(o.a) * o.v; o.y += Math.sin(o.a) * o.v;
+      if (o.x < -30) o.x = W + 30; if (o.x > W + 30) o.x = -30; if (o.y < 40) { o.y = 40; o.a = -o.a; } if (o.y > H + 30) o.y = 40;
     }
-    ctx.fillStyle = INK;
-    withShadow(() => {
-      ctx.globalAlpha = 0.35; for (const br of state.bricks) if (!br.dead) ctx.fillRect(br.x, br.y, br.w, br.h);
-      ctx.globalAlpha = 1; ctx.fillRect(px - pw / 2, py, pw, ph); ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.fill();
-    }, 10, 3, 5, 0.4);
-    scoreText(String(state.score));
-  }
-
-  /* ================= snake ================= */
-  function initSnake() {
-    state.head = { x: W / 2, y: H / 2, a: 0 }; state.trail = []; state.len = 40; state.food = []; state.score = 0; state.flash = 0;
-    for (let i = 0; i < 6; i++) spawnFood();
-  }
-  function spawnFood() { state.food.push({ x: 40 + Math.random() * (W - 80), y: 80 + Math.random() * (H - 140) }); }
-  function drawSnake() {
-    const h = state.head, INK = ink(), speed = 3.2, seg = 6;
-    if (mouse.active) { const ta = Math.atan2(eased.y - h.y, eased.x - h.x); h.a += Math.atan2(Math.sin(ta - h.a), Math.cos(ta - h.a)) * 0.12; }
-    else h.a += 0.01;
-    h.x += Math.cos(h.a) * speed; h.y += Math.sin(h.a) * speed;
-    if (h.x < 0) h.x += W; if (h.x > W) h.x -= W; if (h.y < 0) h.y += H; if (h.y > H) h.y -= H;
-    state.trail.unshift({ x: h.x, y: h.y }); if (state.trail.length > state.len * seg) state.trail.length = state.len * seg;
-    for (const f of state.food) { if (!f.eaten && Math.hypot(f.x - h.x, f.y - h.y) < 14) { f.eaten = true; state.len += 6; state.score++; state.flash = 20; spawnFood(); } }
-    state.food = state.food.filter(f => !f.eaten);
-    ctx.fillStyle = INK;
-    withShadow(() => {
-      ctx.globalAlpha = 0.5; for (const f of state.food) { ctx.beginPath(); ctx.rect(f.x - 5, f.y - 5, 10, 10); ctx.fill(); }
+    // --- cones
+    for (const k of state.cones) {
+      const dx = k.x - c.x, dy = k.y - c.y, d = Math.hypot(dx, dy);
+      if (d < 22 && c.v > 1) { k.vx = (dx / d) * c.v * 0.9 + Math.cos(c.a) * c.v * 0.6; k.vy = (dy / d) * c.v * 0.9 + Math.sin(c.a) * c.v * 0.6; k.vr = (Math.random() - 0.5) * 0.6; k.down = true; }
+      k.x += k.vx; k.y += k.vy; k.rot += k.vr; k.vx *= 0.9; k.vy *= 0.9; k.vr *= 0.92;
+      k.x = Math.max(10, Math.min(W - 10, k.x)); k.y = Math.max(70, Math.min(H - 10, k.y));
+    }
+    // --- draw
+    ctx.strokeStyle = INK; ctx.lineCap = 'round'; ctx.lineWidth = 3;
+    for (const m of state.marks) { m.life -= 0.0015; ctx.globalAlpha = Math.max(0, m.life) * 0.35; ctx.beginPath(); ctx.arc(m.x, m.y, 1.5, 0, Math.PI * 2); ctx.fillStyle = INK; ctx.fill(); }
+    state.marks = state.marks.filter(m => m.life > 0);
+    ctx.globalAlpha = 1;
+    const drawCar = (o, len, wid, fill) => {
+      ctx.save(); ctx.translate(o.x, o.y); ctx.rotate(o.a);
+      withShadow(() => { ctx.fillStyle = fill; ctx.fillRect(-len / 2, -wid / 2, len, wid); }, 10, 4, 6, dark ? 0.8 : 0.35);
+      ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.strokeRect(-len / 2, -wid / 2, len, wid);
+      ctx.fillStyle = INK; ctx.globalAlpha = 0.85;
+      ctx.fillRect(len * 0.05, -wid / 2 + 3, len * 0.28, wid - 6);        // windshield
+      ctx.fillRect(-len / 2 + 3, -wid / 2 + 3, len * 0.18, wid - 6);     // rear window
       ctx.globalAlpha = 1;
-      for (let i = state.trail.length - 1; i >= 0; i -= seg) {
-        const p = state.trail[i], k = 1 - i / state.trail.length;
-        ctx.beginPath(); ctx.arc(p.x, p.y, 4 + k * 6, 0, Math.PI * 2); ctx.fill();
-      }
-      ctx.beginPath(); ctx.arc(h.x, h.y, 10, 0, Math.PI * 2); ctx.fill();
-    }, 8, 3, 4, 0.35);
-    // eyes
-    ctx.fillStyle = paper();
-    for (const s of [-1, 1]) { const ex = h.x + Math.cos(h.a + s * 0.6) * 6, ey = h.y + Math.sin(h.a + s * 0.6) * 6; ctx.beginPath(); ctx.arc(ex, ey, 2.2, 0, Math.PI * 2); ctx.fill(); }
-    scoreText(String(state.score));
+      for (const s of [-1, 1]) { ctx.fillRect(-len / 2 + 4, s * wid / 2 - (s > 0 ? 4 : 0), 8, 4); ctx.fillRect(len / 2 - 12, s * wid / 2 - (s > 0 ? 4 : 0), 8, 4); }
+      ctx.restore();
+    };
+    for (const o of state.cars) drawCar(o, 34, 18, dark ? '#333' : '#ddd');
+    for (const k of state.cones) {
+      ctx.save(); ctx.translate(k.x, k.y); ctx.rotate(k.rot);
+      withShadow(() => { ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--accent').trim() || '#ffb000'; ctx.beginPath(); if (k.down) { ctx.moveTo(-9, -5); ctx.lineTo(9, 0); ctx.lineTo(-9, 5); } else { ctx.moveTo(0, -9); ctx.lineTo(8, 7); ctx.lineTo(-8, 7); } ctx.closePath(); ctx.fill(); }, 6, 2, 3, 0.35);
+      ctx.restore();
+    }
+    drawCar(c, 40, 20, PAPER);
   }
 
   /* ================= boids (a flock that follows the cursor) ================= */
@@ -375,8 +381,8 @@
   }
 
   /* ================= runtime ================= */
-  const DRAW = { dots: drawDots, constellation: drawConstellation, water: drawWater, smoke: drawSmoke, boids: drawBoids, soccer: drawSoccer, pong: drawPong, breakout: drawBreakout, snake: drawSnake };
-  const INIT = { constellation: initConstellation, water: initWater, smoke: initSmoke, boids: initBoids, soccer: initSoccer, pong: initPong, breakout: initBreakout, snake: initSnake };
+  const DRAW = { dots: drawDots, constellation: drawConstellation, water: drawWater, smoke: drawSmoke, boids: drawBoids, soccer: drawSoccer, pong: drawPong, cars: drawCars };
+  const INIT = { constellation: initConstellation, water: initWater, smoke: initSmoke, boids: initBoids, soccer: initSoccer, pong: initPong, cars: initCars };
 
   function frame() {
     frameNo++;
