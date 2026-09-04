@@ -143,6 +143,7 @@ function loadSchedule(text) {
       allDay: ev.start.allDay,
     };
   }).sort((a, b) => a.start - b.start);
+  computeSchoolHours();
   saveJSON(KEYS.schedCache, { text, at: Date.now() });
   renderMapping();
   render();
@@ -209,8 +210,9 @@ function effectiveDue(a) {
 
 /* ---------- Rendering ---------- */
 
-let view = localStorage.getItem('scheduler.view') || 'calendar';
+let view = localStorage.getItem('scheduler.view') || 'plan';
 let weekStart = startOfWeek(new Date());
+let planDay = new Date(dayKey(new Date()));
 
 function startOfWeek(d) {
   const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -253,7 +255,8 @@ function render() {
   document.querySelectorAll('.seg button').forEach(b => b.classList.toggle('active', b.dataset.view === view));
   $('#list').hidden = view !== 'list';
   $('#calendar').hidden = view !== 'calendar';
-  if (view === 'calendar') renderCalendar(); else renderList();
+  $('#plan').hidden = view !== 'plan';
+  if (view === 'calendar') renderCalendar(); else if (view === 'plan') renderPlan(); else renderList();
 }
 
 function renderList() {
@@ -322,6 +325,143 @@ function renderList() {
   list.innerHTML = html;
 }
 
+/* ---------- Free time ---------- */
+
+const BUFFER_MIN = 5;
+const LUNCH = { start: [11, 50], end: [12, 10], title: 'Lunch' };
+const MIN_FREE_MIN = 10;
+
+// Timed events for a school day, including lunch. Returns [] on days with no classes.
+function dayEvents(k) {
+  const evs = scheduleForDay(k).filter(s => !s.allDay).map(s => ({
+    title: classLabel(s.title), start: s.start, end: s.end || new Date(s.start.getTime() + 45 * 60000), block: s.block, sched: s,
+  }));
+  if (!evs.length) return [];
+  const d = new Date(k);
+  evs.push({ title: LUNCH.title, start: new Date(d.getFullYear(), d.getMonth(), d.getDate(), ...LUNCH.start), end: new Date(d.getFullYear(), d.getMonth(), d.getDate(), ...LUNCH.end), lunch: true });
+  return evs.sort((x, y) => x.start - y.start);
+}
+
+// Usual school hours: the most common earliest start and latest end across all school days in the schedule,
+// so a day whose first period is free still counts that period as free time.
+let schoolHours = { start: 8 * 60 + 25, end: 15 * 60 + 20 };
+function computeSchoolHours() {
+  const byDay = new Map();
+  for (const s of schedule) {
+    if (s.allDay) continue;
+    const k = dayKey(s.start), e = s.end || s.start;
+    const d = byDay.get(k) || { start: Infinity, end: -Infinity };
+    d.start = Math.min(d.start, s.start.getHours() * 60 + s.start.getMinutes());
+    d.end = Math.max(d.end, e.getHours() * 60 + e.getMinutes());
+    byDay.set(k, d);
+  }
+  const mode = (arr) => { const c = new Map(); for (const v of arr) c.set(v, (c.get(v) || 0) + 1); return [...c.entries()].sort((x, y) => y[1] - x[1])[0]?.[0]; };
+  const days = [...byDay.values()];
+  if (days.length) schoolHours = { start: mode(days.map(d => d.start)), end: mode(days.map(d => d.end)) };
+}
+function schoolBounds(k) {
+  const d = new Date(k);
+  return [new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, schoolHours.start), new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, schoolHours.end)];
+}
+
+// Free slots within school hours, with BUFFER_MIN trimmed off each side of every event.
+function freeSlots(evs) {
+  if (!evs.length) return [];
+  const buf = BUFFER_MIN * 60000;
+  const [b0, b1] = schoolBounds(dayKey(evs[0].start));
+  const dayStart = new Date(Math.min(b0.getTime(), evs[0].start.getTime()));
+  const dayEnd = Math.max(b1.getTime(), ...evs.map(e => e.end.getTime()));
+  const busy = evs.map(e => [e.start.getTime() - buf, e.end.getTime() + buf]);
+  busy.push([dayStart.getTime() - 1, dayStart.getTime()], [dayEnd, dayEnd + 1]); // sentinels so leading/trailing gaps count
+  busy.sort((x, y) => x[0] - y[0]);
+  const merged = [];
+  for (const b of busy) { const last = merged[merged.length - 1]; if (last && b[0] <= last[1]) last[1] = Math.max(last[1], b[1]); else merged.push([...b]); }
+  const slots = [];
+  for (let i = 0; i + 1 < merged.length; i++) {
+    const s = merged[i][1], e = merged[i + 1][0];
+    if (e - s >= MIN_FREE_MIN * 60000 && s >= dayStart.getTime() && e <= dayEnd) slots.push({ start: new Date(s), end: new Date(e), minutes: Math.round((e - s) / 60000) });
+  }
+  return slots;
+}
+
+function fmtMinutes(m) { return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60 ? (m % 60) + 'm' : ''}`.trim() : `${m}m`; }
+
+// Assignments due on day k, with effective due times, sorted.
+function dueOn(k) {
+  const course = $('#course-filter').value;
+  return assignments.filter(a => dayKey(a.due) === k && (!course || a.course === course))
+    .map(a => ({ a, eff: effectiveDue(a) })).sort((x, y) => x.eff.due - y.eff.due);
+}
+
+function renderPlan() {
+  const k = dayKey(planDay);
+  const now = new Date();
+  const todayKey = dayKey(now);
+  const evs = dayEvents(k);
+  const slots = freeSlots(evs);
+  const dues = dueOn(k);
+  $('#plan-date').textContent = fmtDay(planDay);
+  $('#count').textContent = `(${dues.length} due ${k === todayKey ? 'today' : 'this day'})`;
+
+  const body = $('#plan-body');
+  if (!evs.length) {
+    body.innerHTML = `<p class="empty">No school this day.</p>` + (dues.length ? dueListHtml(dues, now) : '');
+    return;
+  }
+  const [b0, b1] = schoolBounds(k);
+  const dayStart = new Date(Math.min(b0.getTime(), evs[0].start.getTime())), dayEnd = new Date(Math.max(b1.getTime(), ...evs.map(e => e.end.getTime())));
+  const totalFree = slots.reduce((n, s) => n + s.minutes, 0);
+  const freeLeft = k === todayKey ? slots.reduce((n, s) => n + Math.max(0, Math.round((s.end - Math.max(now, s.start)) / 60000)), 0) : null;
+
+  // An assignment can only be worked on at school if some free slot starts before it is due.
+  const firstFree = slots[0] ? slots[0].start : null;
+  const beforeSchool = dues.filter(x => !firstFree || x.eff.due <= firstFree);
+  const inSchool = dues.filter(x => firstFree && x.eff.due > firstFree);
+
+  let html = `<div class="plan-summary">
+    <div class="stat"><b>${fmtClock(dayStart)}–${fmtClock(dayEnd)}</b><span>school day</span></div>
+    <div class="stat"><b>${fmtMinutes(totalFree)}</b><span>free time${freeLeft !== null ? ` · ${fmtMinutes(freeLeft)} left` : ''}</span></div>
+    <div class="stat"><b>${slots.length}</b><span>free slot${slots.length === 1 ? '' : 's'}</span></div>
+    <div class="stat"><b>${dues.length}</b><span>due this day</span></div>
+  </div>`;
+
+  html += `<div class="plan-section ${beforeSchool.length ? 'warn' : ''}">Must be done before school (due by first period)</div>`;
+  html += beforeSchool.length ? dueListHtml(beforeSchool, now) : `<p class="empty small">Nothing due at first period.</p>`;
+
+  html += `<div class="plan-section">Day timeline</div><div class="tl">`;
+  const rows = [...evs.map(e => ({ ...e, kind: e.lunch ? 'lunch' : 'klass' })), ...slots.map(s => ({ ...s, kind: 'free', title: `Free · ${fmtMinutes(s.minutes)}` }))].sort((x, y) => x.start - y.start);
+  for (const r of rows) {
+    const past = k === todayKey && r.end <= now;
+    const current = k === todayKey && r.start <= now && now < r.end;
+    html += `<div class="tl-row ${r.kind} ${past ? 'past' : ''} ${current ? 'now' : ''}">
+      <div class="when"><b>${fmtClock(r.start)}</b>${fmtClock(r.end)}</div>
+      <div class="what">${escapeHtml(r.title)}${current ? '<small>now</small>' : ''}</div>`;
+    if (r.kind === 'klass') {
+      const here = dues.filter(x => x.eff.meeting === r.sched);
+      if (here.length) html += `<ul class="work">${here.map(x => `<li>${dueLink(x)}<span class="due">due at start of class</span></li>`).join('')}</ul>`;
+    }
+    if (r.kind === 'free') {
+      // Work on anything due later this same day. Tight = due at the very next class.
+      const cands = inSchool.filter(x => x.eff.due > r.start);
+      html += `<ul class="work">` + (cands.length
+        ? cands.map(x => { const mins = Math.round((x.eff.due - r.end) / 60000); return `<li>${dueLink(x)}<span class="due ${mins <= 10 ? 'tight' : ''}">due ${fmtClock(x.eff.due)}${mins <= 10 ? ' · right after' : ''}</span></li>`; }).join('')
+        : `<li class="nothing">Nothing else due today. Get ahead on the week.</li>`) + `</ul>`;
+    }
+    html += `</div>`;
+  }
+  html += `</div>`;
+  body.innerHTML = html;
+}
+
+function dueLink(x) {
+  const { a } = x;
+  const t = `${escapeHtml(a.title)} <small class="c">${escapeHtml(a.course)}</small>`;
+  return a.url ? `<a href="${escapeHtml(a.url)}" target="_blank" rel="noopener">${t}</a>` : `<span>${t}</span>`;
+}
+function dueListHtml(list, now) {
+  return `<ul class="due-list">${list.map(x => `<li class="${x.eff.due < now ? 'past' : ''}"><div>${dueLink(x)}</div><div class="c">${x.a.allDay && !x.eff.moved ? 'All day' : fmtClock(x.eff.due)}${x.eff.moved ? ` <span class="moved">${escapeHtml(fmtTime(x.a))}</span>` : ''}</div></li>`).join('')}</ul>`;
+}
+
 /* ---------- Calendar (week) view ---------- */
 
 function renderCalendar() {
@@ -375,6 +515,9 @@ function renderCalendar() {
   // Day columns
   for (const { k } of days) {
     html += `<div class="cal-col ${k === todayKey ? 'today' : ''}" style="height:${(h1 - h0) * HOUR}px">`;
+    const evs = dayEvents(k);
+    for (const f of freeSlots(evs)) html += `<div class="cal-free" style="top:${top(f.start)}px;height:${Math.max(14, top(f.end) - top(f.start) - 2)}px">free ${fmtMinutes(f.minutes)}</div>`;
+    for (const l of evs.filter(e => e.lunch)) html += `<div class="cal-ev klass unmapped" style="top:${top(l.start)}px;height:${Math.max(18, top(l.end) - top(l.start) - 2)}px"><div class="t">Lunch</div></div>`;
     for (const s of sched.filter(s => !s.allDay && dayKey(s.start) === k)) {
       const end = s.end || new Date(s.start.getTime() + 45 * 60000);
       const mapped = s.block && blockMap[s.block];
@@ -418,6 +561,9 @@ on('.seg button', 'click', (e) => { view = e.currentTarget.dataset.view; localSt
 on('#cal-prev', 'click', () => { weekStart = new Date(weekStart.getTime() - 7 * DAY); render(); });
 on('#cal-next', 'click', () => { weekStart = new Date(weekStart.getTime() + 7 * DAY); render(); });
 on('#cal-today', 'click', () => { weekStart = startOfWeek(new Date()); render(); });
+on('#plan-prev', 'click', () => { planDay = new Date(planDay.getTime() - DAY); render(); });
+on('#plan-next', 'click', () => { planDay = new Date(planDay.getTime() + DAY); render(); });
+on('#plan-today', 'click', () => { planDay = new Date(dayKey(new Date())); render(); });
 
 on('#unlock-form', 'submit', (e) => {
   e.preventDefault();
