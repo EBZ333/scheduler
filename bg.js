@@ -1,5 +1,5 @@
 // Reactive monochrome backgrounds on a fixed full-screen canvas behind the page.
-// Styles: none | dots | constellation | water | smoke | boids | soccer | pong | orbit | bubbles | fluid | fluid mono | fluid amber (fluid.js)
+// Styles: none | dots | constellation | water | smoke | boids | soccer | pong | orbit | bubbles
 (function (global) {
   const canvas = document.createElement('canvas');
   canvas.id = 'bg';
@@ -372,40 +372,6 @@
   const DRAW = { dots: drawDots, constellation: drawConstellation, water: drawWater, smoke: drawSmoke, boids: drawBoids, soccer: drawSoccer, pong: drawPong, orbit: drawOrbit, bubbles: drawBubbles };
   const INIT = { constellation: initConstellation, water: initWater, smoke: initSmoke, boids: initBoids, soccer: initSoccer, pong: initPong, orbit: initOrbit, bubbles: initBubbles };
 
-  /* ================= WebGL fluid (PavelDoGreat's simulation, see fluid.js) ================= */
-  const FLUID = {
-    'fluid':       { RANDOM_COLORS: true,  COLORFUL: true,  SUNRAYS: true,  CURL: 6 },
-    'fluid mono':  { MONO: true,           COLORFUL: true,  SUNRAYS: false, CURL: 10 },
-    'fluid amber': { RANDOM_COLORS: false, SPLAT_HUE: 0.1, COLORFUL: false, SUNRAYS: true, CURL: 4 },
-  };
-  const FLUID_BASE = {
-    SIM_RESOLUTION: 128, DYE_RESOLUTION: 1024, CAPTURE_RESOLUTION: 512,
-    DENSITY_DISSIPATION: 1, VELOCITY_DISSIPATION: 0.6, PRESSURE: 0.6, PRESSURE_ITERATIONS: 20, CURL: 6,
-    SPLAT_RADIUS: 0.2, SPLAT_FORCE: 6000, SHADING: true, COLORFUL: true, COLOR_UPDATE_SPEED: 10, PAUSED: false,
-    BACK_COLOR: { r: 0, g: 0, b: 0 }, TRANSPARENT: false,
-    BLOOM: false, BLOOM_ITERATIONS: 8, BLOOM_RESOLUTION: 256, BLOOM_INTENSITY: 0.8, BLOOM_THRESHOLD: 0.6, BLOOM_SOFT_KNEE: 0.7,
-    SUNRAYS: true, SUNRAYS_RESOLUTION: 196, SUNRAYS_WEIGHT: 1.0, RANDOM_COLORS: true, SPLAT_HUE: 0,
-  };
-  let fluid = null, fluidCanvas = null;
-  function pageBack() { const m = paper().match(/\d+/g) || [255, 255, 255]; return { r: +m[0], g: +m[1], b: +m[2] }; }
-  function startFluid(name) {
-    if (!global.Fluid) return;
-    if (!fluidCanvas) {
-      fluidCanvas = document.createElement('canvas'); fluidCanvas.id = 'fluid'; fluidCanvas.setAttribute('aria-hidden', 'true');
-      document.body.prepend(fluidCanvas);
-    }
-    fluidCanvas.hidden = false;
-    const cfg = Object.assign({}, FLUID_BASE, FLUID[name], { BACK_COLOR: pageBack() });
-    // In light mode a greyscale dye is invisible over white, so tint it toward the accent instead.
-    if (cfg.MONO && !isDark()) { cfg.MONO = false; cfg.RANDOM_COLORS = false; cfg.SPLAT_HUE = 0.1; }
-    fluid = global.Fluid.start(fluidCanvas, cfg);
-  }
-  function stopFluid() {
-    if (fluid) { fluid.stop(); fluid = null; }
-    if (fluidCanvas) { fluidCanvas.hidden = true; }
-  }
-  matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => { if (fluid) { stopFluid(); startFluid(style); } });
-
   function frame() {
     frameNo++;
     ctx.clearRect(0, 0, W, H);
@@ -417,12 +383,6 @@
   function start() { if (style !== 'none' && !raf && !reduce) raf = requestAnimationFrame(frame); }
   function stop() { cancelAnimationFrame(raf); raf = 0; }
   function set(name) {
-    stopFluid();
-    if (FLUID[name]) {
-      style = name; stop(); state = {}; ctx.clearRect(0, 0, W, H); canvas.hidden = true;
-      if (!reduce) startFluid(name);
-      return;
-    }
     style = DRAW[name] ? name : 'none';
     stop(); state = {}; ctx.clearRect(0, 0, W, H);
     canvas.hidden = style === 'none';
@@ -430,5 +390,5 @@
   }
 
   resize();
-  global.BG = { set, styles: ['none', ...Object.keys(DRAW), ...Object.keys(FLUID)] };
+  global.BG = { set, styles: ['none', ...Object.keys(DRAW)] };
 })(window);

@@ -31,7 +31,3 @@ Events named `Block 1` … `Block 8` in the Google calendar are detected as bloc
 - `ics.js`: ICS parser with RRULE expansion (daily/weekly, EXDATE, overrides); splits Canvas titles like `Essay 2 [English 10]` into title + course
 - `app.js`: decrypting, caching, block mapping, rendering
 - `scripts/fetch.js`: the Actions-side fetch + encrypt
-
-## Credits
-
-The `fluid` backgrounds use [WebGL-Fluid-Simulation](https://github.com/PavelDoGreat/WebGL-Fluid-Simulation) by Pavel Dobryakov, as adapted by Thomas Kabalin in [WebGL-Fluid-Background](https://github.com/tkabalin/WebGL-Fluid-Background). MIT licensed; see the header of `fluid.js`.
