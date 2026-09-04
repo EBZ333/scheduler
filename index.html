@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scheduler</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>Scheduler</h1>
+  <p class="sub">Your Canvas assignments, pulled from your calendar feed.</p>
+</header>
+
+<main>
+  <section id="setup" class="card">
+    <h2>Connect Canvas</h2>
+    <p>In Canvas go to <strong>Calendar → Calendar Feed</strong> and copy the link. It looks like
+      <code>https://yourschool.instructure.com/feeds/calendars/user_XXXX.ics</code>.
+      The long code in the URL is what lets this page read your assignments. It is saved only in this browser.</p>
+    <form id="feed-form">
+      <input id="feed-url" type="url" placeholder="Paste your calendar feed URL" required>
+      <button type="submit">Load assignments</button>
+    </form>
+    <details>
+      <summary>Feed won't load? Upload or paste the .ics file instead</summary>
+      <p>Open the feed URL in a new tab, save the file, then choose it here.</p>
+      <input id="feed-file" type="file" accept=".ics,text/calendar">
+      <textarea id="feed-text" placeholder="…or paste the raw ICS text here"></textarea>
+      <button id="parse-text" type="button">Parse pasted text</button>
+    </details>
+    <p id="status" class="status"></p>
+  </section>
+
+  <section id="results" class="card" hidden>
+    <div class="toolbar">
+      <h2>Assignments <span id="count"></span></h2>
+      <label><input type="checkbox" id="show-past"> Show past</label>
+      <select id="course-filter"><option value="">All courses</option></select>
+      <button id="refresh" type="button">Refresh</button>
+      <button id="forget" type="button" class="ghost">Forget feed</button>
+    </div>
+    <div id="list"></div>
+  </section>
+</main>
+
+<script src="ics.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
