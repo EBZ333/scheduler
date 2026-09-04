@@ -1,0 +1,37 @@
+name: Fetch calendar feeds
+
+on:
+  schedule:
+    - cron: '17 * * * *'   # hourly
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fetch-feeds
+  cancel-in-progress: true
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Fetch and encrypt feeds
+        env:
+          CANVAS_FEED_URL: ${{ secrets.CANVAS_FEED_URL }}
+          SCHEDULE_FEED_URL: ${{ secrets.SCHEDULE_FEED_URL }}
+          DATA_PASSPHRASE: ${{ secrets.DATA_PASSPHRASE }}
+        run: node scripts/fetch.js
+      - name: Commit data
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data
+          git diff --cached --quiet && echo "No changes" && exit 0
+          git commit -m "Update calendar data"
+          git push

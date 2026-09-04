@@ -1,17 +1,10 @@
 const $ = (s) => document.querySelector(s);
 const KEYS = {
-  feedUrl: 'scheduler.feedUrl', feedCache: 'scheduler.feedCache',
-  schedUrl: 'scheduler.schedUrl', schedCache: 'scheduler.schedCache',
+  pass: 'scheduler.passphrase',
+  feedCache: 'scheduler.feedCache', schedCache: 'scheduler.schedCache',
   mapping: 'scheduler.blockMap',
 };
 const DAY = 86400000;
-
-// Canvas and Google don't send CORS headers on feeds, so try direct, then public proxies.
-const PROXIES = [
-  (u) => u,
-  (u) => 'https://corsproxy.io/?' + encodeURIComponent(u),
-  (u) => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
-];
 
 let assignments = [];   // from Canvas
 let schedule = [];      // expanded schedule instances: {title, block, start, end, allDay}
@@ -26,18 +19,53 @@ function setStatus(sel, msg, isError = false) {
   el.classList.toggle('error', isError);
 }
 
-async function fetchFeed(url) {
-  let lastErr;
-  for (const wrap of PROXIES) {
-    try {
-      const res = await fetch(wrap(url), { cache: 'no-store' });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const text = await res.text();
-      if (!/BEGIN:VCALENDAR/.test(text)) throw new Error('Response was not an ICS calendar');
-      return text;
-    } catch (e) { lastErr = e; }
+/* ---------- Encrypted data from the repo (written by .github/workflows/fetch.yml) ---------- */
+
+const enc = new TextEncoder(), dec = new TextDecoder();
+const b64 = (s) => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+
+async function decrypt(payload, passphrase) {
+  const { salt, iv, ct, iter } = payload;
+  const base = await crypto.subtle.importKey('raw', enc.encode(passphrase), 'PBKDF2', false, ['deriveKey']);
+  const key = await crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: b64(salt), iterations: iter || 200000, hash: 'SHA-256' },
+    base, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64(iv) }, key, b64(ct));
+  return dec.decode(plain);
+}
+
+async function fetchEncrypted(name) {
+  const res = await fetch(`data/${name}.enc`, { cache: 'no-store' });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+async function showMeta() {
+  try {
+    const res = await fetch('data/meta.json', { cache: 'no-store' });
+    if (!res.ok) { $('#meta').textContent = 'No data has been fetched yet. Set the repo secrets and run the "Fetch calendar feeds" workflow.'; return; }
+    const m = await res.json();
+    const when = new Date(m.updated).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+    $('#meta').textContent = `Last fetched ${when} · Canvas: ${m.feeds.canvas || '?'} · Schedule: ${m.feeds.schedule || '?'}`;
+  } catch (_) {}
+}
+
+async function unlock(passphrase) {
+  setStatus('#status', 'Fetching and decrypting…');
+  try {
+    const [c, s] = await Promise.all([fetchEncrypted('canvas'), fetchEncrypted('schedule')]);
+    if (!c && !s) { setStatus('#status', 'No encrypted data in the repo yet. Check the Actions tab.', true); return; }
+    let msgs = [];
+    if (s) { loadSchedule(await decrypt(s, passphrase)); msgs.push(`${schedule.length} schedule events`); }
+    if (c) { loadAssignments(await decrypt(c, passphrase)); msgs.push(`${assignments.length} Canvas items`); }
+    localStorage.setItem(KEYS.pass, passphrase);
+    setStatus('#status', 'Unlocked: ' + msgs.join(', ') + '.');
+  } catch (e) {
+    const bad = e.name === 'OperationError';
+    setStatus('#status', bad ? 'Wrong passphrase.' : `Couldn't load data (${e.message}).`, true);
+    if (bad) localStorage.removeItem(KEYS.pass);
   }
-  throw lastErr || new Error('Could not fetch feed');
 }
 
 function escapeHtml(s) {
@@ -56,18 +84,6 @@ function loadAssignments(text) {
   renderMapping();
   render();
   $('#results').hidden = false;
-  setStatus('#status', `Loaded ${assignments.length} items.`);
-}
-
-async function loadAssignmentsFromUrl(url) {
-  setStatus('#status', 'Fetching feed…');
-  try {
-    const text = await fetchFeed(url);
-    localStorage.setItem(KEYS.feedUrl, url);
-    loadAssignments(text);
-  } catch (e) {
-    setStatus('#status', `Couldn't fetch the feed (${e.message}). Use the upload/paste option below.`, true);
-  }
 }
 
 function courses() {
@@ -105,19 +121,6 @@ function loadSchedule(text) {
   saveJSON(KEYS.schedCache, { text, at: Date.now() });
   renderMapping();
   render();
-  const blocks = blockNames();
-  setStatus('#sched-status', `Loaded ${schedule.length} schedule events, ${blocks.length} distinct blocks.`);
-}
-
-async function loadScheduleFromUrl(url) {
-  setStatus('#sched-status', 'Fetching schedule…');
-  try {
-    const text = await fetchFeed(url);
-    localStorage.setItem(KEYS.schedUrl, url);
-    loadSchedule(text);
-  } catch (e) {
-    setStatus('#sched-status', `Couldn't fetch the schedule (${e.message}). Try the upload option.`, true);
-  }
 }
 
 function blockNames() {
@@ -258,56 +261,41 @@ function render() {
 
 /* ---------- Wiring ---------- */
 
-$('#feed-form').addEventListener('submit', (e) => {
+$('#unlock-form').addEventListener('submit', (e) => {
   e.preventDefault();
-  loadAssignmentsFromUrl($('#feed-url').value.trim());
+  unlock($('#passphrase').value);
 });
 $('#feed-file').addEventListener('change', async (e) => {
   const f = e.target.files[0];
-  if (f) loadAssignments(await f.text());
-});
-$('#parse-text').addEventListener('click', () => {
-  const t = $('#feed-text').value;
-  if (t.trim()) loadAssignments(t);
-});
-$('#sched-form').addEventListener('submit', (e) => {
-  e.preventDefault();
-  loadScheduleFromUrl($('#sched-url').value.trim());
+  if (f) { loadAssignments(await f.text()); setStatus('#status', `Loaded ${assignments.length} Canvas items from file.`); }
 });
 $('#sched-file').addEventListener('change', async (e) => {
   const f = e.target.files[0];
-  if (f) loadSchedule(await f.text());
+  if (f) { loadSchedule(await f.text()); setStatus('#status', `Loaded ${schedule.length} schedule events from file.`); }
 });
 $('#show-past').addEventListener('change', render);
 $('#course-filter').addEventListener('change', render);
 $('#refresh').addEventListener('click', () => {
-  const u1 = localStorage.getItem(KEYS.feedUrl);
-  const u2 = localStorage.getItem(KEYS.schedUrl);
-  if (u1) loadAssignmentsFromUrl(u1);
-  if (u2) loadScheduleFromUrl(u2);
-  if (!u1 && !u2) setStatus('#status', 'No saved feed URLs.', true);
+  const p = localStorage.getItem(KEYS.pass);
+  showMeta();
+  if (p) unlock(p); else setStatus('#status', 'Enter your passphrase first.', true);
 });
 $('#forget').addEventListener('click', () => {
   Object.values(KEYS).forEach(k => localStorage.removeItem(k));
   assignments = []; schedule = []; blockMap = {};
   $('#results').hidden = true;
   $('#mapping').hidden = true;
-  $('#feed-url').value = '';
-  $('#sched-url').value = '';
-  setStatus('#status', 'Forgot saved feeds.');
-  setStatus('#sched-status', '');
+  $('#passphrase').value = '';
+  setStatus('#status', 'Forgot passphrase and cached data.');
 });
 
-// Boot: restore saved URLs, show cached data instantly, then refresh.
+// Boot: show cached data instantly, then refresh from the repo if we have the passphrase.
 (function boot() {
-  const u1 = localStorage.getItem(KEYS.feedUrl);
-  const u2 = localStorage.getItem(KEYS.schedUrl);
+  const p = localStorage.getItem(KEYS.pass);
   const c1 = loadJSON(KEYS.feedCache);
   const c2 = loadJSON(KEYS.schedCache);
-  if (u1) $('#feed-url').value = u1;
-  if (u2) $('#sched-url').value = u2;
   if (c2) { try { loadSchedule(c2.text); } catch (_) {} }
   if (c1) { try { loadAssignments(c1.text); } catch (_) {} }
-  if (u1) loadAssignmentsFromUrl(u1);
-  if (u2) loadScheduleFromUrl(u2);
+  showMeta();
+  if (p) { $('#passphrase').value = p; unlock(p); }
 })();
