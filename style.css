@@ -56,8 +56,11 @@ input[type=checkbox] { accent-color: var(--ink); }
   display: flex; align-items: center; gap: 1.5rem; padding: 0 1.25rem;
   background: var(--bg); border-bottom: 2px solid var(--line);
 }
-.brand { font-size: 1.1rem; letter-spacing: -0.02em; }
-.clock { font-size: 0.85rem; color: var(--ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.corner { position: fixed; right: 1.25rem; bottom: 1rem; z-index: 5; text-align: right; pointer-events: none; line-height: 1; }
+.corner .brand { font-size: 0.7rem; color: var(--ink-3); letter-spacing: 0.02em; margin-bottom: 0.3rem; }
+.clock { font-variant-numeric: tabular-nums; white-space: nowrap; display: flex; flex-direction: column; align-items: flex-end; gap: 0.15rem; }
+.clock .t { font-size: 2.4rem; letter-spacing: -0.04em; }
+.clock .d { font-size: 0.6rem; color: var(--ink-3); }
 .seg { display: flex; gap: 1.25rem; height: 100%; }
 .seg button { background: transparent; color: var(--ink-3); padding: 0; height: 100%; border-bottom: 3px solid transparent; margin-bottom: -2px; font-size: 0.95rem; }
 .seg button.active { color: var(--ink); border-bottom-color: var(--ink); }
@@ -79,7 +82,7 @@ summary { cursor: pointer; font-weight: 700; }
 .map-row select { width: 100%; background-color: transparent; }
 
 /* ---------- main / sub bar ---------- */
-main { max-width: 1400px; margin: 0 auto; padding: 1.25rem 1.25rem 4rem; }
+main { max-width: 1400px; margin: 0 auto; padding: 1.25rem 1.25rem 6rem; }
 .subbar { display: flex; align-items: baseline; gap: 1rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
 .subbar h1 { font-size: clamp(1.4rem, 3vw, 2.2rem); cursor: pointer; }
 .nav { display: flex; gap: 2px; }
@@ -173,7 +176,9 @@ main { max-width: 1400px; margin: 0 auto; padding: 1.25rem 1.25rem 4rem; }
 
 @media (max-width: 720px) {
   .bar { gap: 0.9rem; padding: 0 0.9rem; }
-  .brand { display: none; }
+  .corner { right: 0.9rem; bottom: 0.75rem; }
+  .clock .t { font-size: 1.6rem; }
+  .clock .d { font-size: 0.5rem; }
   .controls { gap: 0.5rem; }
   .controls select { max-width: 130px; }
   main { padding: 1rem 0.9rem 3rem; }

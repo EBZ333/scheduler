@@ -604,8 +604,9 @@ on('#plan-date', 'click', () => { planDay = defaultDay(); planDayTouched = false
 // Clock in the top bar.
 function tickClock() {
   const now = new Date();
-  const el = $('#clock');
-  if (el) el.textContent = now.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }).toLowerCase() + ' · ' + now.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }).toLowerCase();
+  const t = $('#clock .t'), d = $('#clock .d');
+  if (t) t.textContent = now.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }).toLowerCase();
+  if (d) d.textContent = now.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }).toLowerCase();
 }
 tickClock(); setInterval(tickClock, 1000);
 // When the school day ends, roll the plan over to the next day (if the user hasn't navigated).

@@ -4,13 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Scheduler</title>
-<link rel="stylesheet" href="style.css?v=9">
+<link rel="stylesheet" href="style.css?v=10">
 </head>
 <body>
 
 <header class="bar">
-  <div class="brand">scheduler</div>
-  <div id="clock" class="clock"></div>
   <nav class="seg" aria-label="View">
     <button type="button" data-view="plan" class="active">Free time</button>
     <button type="button" data-view="calendar">Calendar</button>
@@ -82,12 +80,17 @@
   </div>
 </main>
 
+<div class="corner">
+  <div class="brand">scheduler</div>
+  <div id="clock" class="clock"><span class="t"></span><span class="d"></span></div>
+</div>
+
 <div id="empty-state" class="empty-state" hidden>
   <h1>nothing loaded.</h1>
   <p>Open <button type="button" class="text inline" data-open-settings>Settings</button> and enter your passphrase.</p>
 </div>
 
-<script src="ics.js?v=9"></script>
-<script src="app.js?v=9"></script>
+<script src="ics.js?v=10"></script>
+<script src="app.js?v=10"></script>
 </body>
 </html>
