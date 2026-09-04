@@ -393,6 +393,22 @@ function dueOn(k) {
     .map(a => ({ a, eff: effectiveDue(a) })).sort((x, y) => x.eff.due - y.eff.due);
 }
 
+// Short course names for the compact summaries: "Biology" -> "Bio", "History 11 (H)" -> "History".
+const SHORT = { biology: 'Bio', chemistry: 'Chem', calculus: 'Calc', physics: 'Physics', precalculus: 'Precalc', engineering: 'Engineering', mathematics: 'Math', literature: 'Lit' };
+function shortCourse(c) {
+  const words = c.replace(/\(h\)|honors|\bhon\b/gi, '').replace(/[^a-z0-9 ]+/gi, ' ').trim().split(/\s+/).filter(w => w && !/^\d+$/.test(w));
+  const key = words.find(w => SHORT[w.toLowerCase()]);
+  if (key) return SHORT[key.toLowerCase()];
+  const first = words.find(w => !['principles', 'of', 'intro', 'to', 'advanced', 'adv', 'ap'].includes(w.toLowerCase())) || words[0] || c;
+  return first;
+}
+// "3 Bio, 1 History"
+function countSummary(list) {
+  const c = new Map();
+  for (const x of list) { const s = shortCourse(x.a.course || 'other'); c.set(s, (c.get(s) || 0) + 1); }
+  return [...c.entries()].sort((x, y) => y[1] - x[1]).map(([s, n]) => `${n} ${s}`).join(', ');
+}
+
 function renderPlan() {
   const k = dayKey(planDay);
   const now = new Date();
@@ -408,46 +424,33 @@ function renderPlan() {
     body.innerHTML = `<p class="empty">No school this day.</p>` + (dues.length ? dueListHtml(dues, now) : '');
     return;
   }
-  const [b0, b1] = schoolBounds(k);
-  const dayStart = new Date(Math.min(b0.getTime(), evs[0].start.getTime())), dayEnd = new Date(Math.max(b1.getTime(), ...evs.map(e => e.end.getTime())));
   const totalFree = slots.reduce((n, s) => n + s.minutes, 0);
-  const freeLeft = k === todayKey ? slots.reduce((n, s) => n + Math.max(0, Math.round((s.end - Math.max(now, s.start)) / 60000)), 0) : null;
-
-  // An assignment can only be worked on at school if some free slot starts before it is due.
   const firstFree = slots[0] ? slots[0].start : null;
   const beforeSchool = dues.filter(x => !firstFree || x.eff.due <= firstFree);
   const inSchool = dues.filter(x => firstFree && x.eff.due > firstFree);
 
-  let html = `<div class="plan-summary">
-    <div class="stat"><b>${fmtClock(dayStart)}–${fmtClock(dayEnd)}</b><span>school day</span></div>
-    <div class="stat"><b>${fmtMinutes(totalFree)}</b><span>free time${freeLeft !== null ? ` · ${fmtMinutes(freeLeft)} left` : ''}</span></div>
-    <div class="stat"><b>${slots.length}</b><span>free slot${slots.length === 1 ? '' : 's'}</span></div>
-    <div class="stat"><b>${dues.length}</b><span>due this day</span></div>
+  const detail = (summaryHtml, list, cls = '') => list.length
+    ? `<details class="${cls}"><summary>${summaryHtml}</summary><ul class="work">${list.map(x => `<li>${dueLink(x)}<span class="due">${x.a.allDay && !x.eff.moved ? 'all day' : 'due ' + fmtClock(x.eff.due)}${x.eff.moved ? ` <span class="moved">${escapeHtml(fmtTime(x.a))}</span>` : ''}</span></li>`).join('')}</ul></details>`
+    : `<div class="what">${summaryHtml}</div>`;
+
+  let html = `<p class="hint">${fmtMinutes(totalFree)} free · ${dues.length} due</p><div class="tl">`;
+  // Before-school row: what has to be finished before first period.
+  html += `<div class="tl-row before ${beforeSchool.length ? 'warn' : ''} ${k === todayKey && evs[0].start <= now ? 'past' : ''}">
+    <div class="when"><b>before</b>${fmtClock(evs[0].start)}</div>
+    ${detail(`<span class="what">Before school</span><small class="sum">${beforeSchool.length ? countSummary(beforeSchool) : 'nothing due at first period'}</small>`, beforeSchool)}
   </div>`;
 
-  html += `<div class="plan-section ${beforeSchool.length ? 'warn' : ''}">Must be done before school (due by first period)</div>`;
-  html += beforeSchool.length ? dueListHtml(beforeSchool, now) : `<p class="empty small">Nothing due at first period.</p>`;
-
-  html += `<div class="plan-section">Day timeline</div><div class="tl">`;
   const rows = [...evs.map(e => ({ ...e, kind: e.lunch ? 'lunch' : 'klass' })), ...slots.map(s => ({ ...s, kind: 'free', title: `Free · ${fmtMinutes(s.minutes)}` }))].sort((x, y) => x.start - y.start);
   for (const r of rows) {
     const past = k === todayKey && r.end <= now;
     const current = k === todayKey && r.start <= now && now < r.end;
+    let list = [], sum = '';
+    if (r.kind === 'klass') { list = dues.filter(x => x.eff.meeting === r.sched); sum = list.length ? `${list.length} due at start` : ''; }
+    if (r.kind === 'free') { list = inSchool.filter(x => x.eff.due > r.start); sum = list.length ? `work on: ${countSummary(list)}` : 'nothing else due today'; }
     html += `<div class="tl-row ${r.kind} ${past ? 'past' : ''} ${current ? 'now' : ''}">
       <div class="when"><b>${fmtClock(r.start)}</b>${fmtClock(r.end)}</div>
-      <div class="what">${escapeHtml(r.title)}${current ? '<small>now</small>' : ''}</div>`;
-    if (r.kind === 'klass') {
-      const here = dues.filter(x => x.eff.meeting === r.sched);
-      if (here.length) html += `<ul class="work">${here.map(x => `<li>${dueLink(x)}<span class="due">due at start of class</span></li>`).join('')}</ul>`;
-    }
-    if (r.kind === 'free') {
-      // Work on anything due later this same day. Tight = due at the very next class.
-      const cands = inSchool.filter(x => x.eff.due > r.start);
-      html += `<ul class="work">` + (cands.length
-        ? cands.map(x => { const mins = Math.round((x.eff.due - r.end) / 60000); return `<li>${dueLink(x)}<span class="due ${mins <= 10 ? 'tight' : ''}">due ${fmtClock(x.eff.due)}${mins <= 10 ? ' · right after' : ''}</span></li>`; }).join('')
-        : `<li class="nothing">Nothing else due today. Get ahead on the week.</li>`) + `</ul>`;
-    }
-    html += `</div>`;
+      ${detail(`<span class="what">${escapeHtml(r.title)}${current ? '<small>now</small>' : ''}</span>${sum ? `<small class="sum">${escapeHtml(sum)}</small>` : ''}`, list)}
+    </div>`;
   }
   html += `</div>`;
   body.innerHTML = html;

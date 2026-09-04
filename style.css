@@ -119,3 +119,16 @@ h3 { font-size: 1rem; margin: 1rem 0 0.25rem; }
 .cal-free { position: absolute; left: 2px; right: 2px; border-radius: 5px; background: color-mix(in srgb, var(--free, #16a34a) 10%, transparent); border: 1px dashed color-mix(in srgb, var(--free, #16a34a) 50%, transparent); font-size: 0.7rem; color: var(--free, #16a34a); padding: 2px 5px; }
 :root { --free: #16a34a; }
 @media (prefers-color-scheme: dark) { :root { --free: #4ade80; } }
+
+.tl-row details > summary { list-style: none; cursor: pointer; display: flex; gap: 0.6rem; align-items: baseline; flex-wrap: wrap; }
+.tl-row details > summary::-webkit-details-marker { display: none; }
+.tl-row details > summary::after { content: '▸'; color: var(--muted); font-size: 0.8rem; margin-left: auto; }
+.tl-row details[open] > summary::after { content: '▾'; }
+.tl-row .sum { color: var(--muted); font-size: 0.8rem; }
+.tl-row.free .sum { color: color-mix(in srgb, var(--free) 70%, var(--text)); }
+.tl-row.before::before { background: var(--late); }
+.tl-row.before.warn .what { color: var(--late); }
+.tl-row.before .sum { color: var(--late); }
+.tl-row.before:not(.warn) .sum { color: var(--muted); }
+.tl-row .what { display: inline; }
+.tl-row .work { margin-top: 0.45rem; }
