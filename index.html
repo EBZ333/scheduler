@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Scheduler</title>
-<link rel="stylesheet" href="style.css?v=21">
+<link rel="stylesheet" href="style.css?v=22">
 </head>
 <body>
 
@@ -47,6 +47,10 @@
         <label class="check"><input type="checkbox" id="clock-seconds"> seconds</label>
       </div>
       <div class="pref">
+        <label for="notify-on">notify</label>
+        <span class="inline"><label class="check"><input type="checkbox" id="notify-on"> each morning at</label> <input id="notify-time" type="time" step="300"></span>
+      </div>
+      <div class="pref">
         <label for="passphrase">data</label>
         <form id="unlock-form" class="inline">
           <input id="passphrase" type="password" placeholder="passphrase" autocomplete="current-password" required>
@@ -78,7 +82,6 @@
         <button type="button" id="plan-next" aria-label="Next day">›</button>
       </div>
       <h1 id="plan-date" title="Back to today"></h1>
-      <span id="count" class="count"></span>
     </div>
     <div id="plan-body"></div>
   </div>
@@ -90,13 +93,12 @@
         <button type="button" id="cal-next" aria-label="Next week">›</button>
       </div>
       <h1 id="cal-range" title="Back to this week"></h1>
-      <span id="cal-count" class="count"></span>
     </div>
     <div id="cal-grid" class="cal-grid"></div>
   </div>
 
   <div id="list-view" hidden>
-    <div class="subbar"><h1>Upcoming</h1><span id="list-count" class="count"></span></div>
+    <div class="subbar"><h1>upcoming</h1></div>
     <div id="list"></div>
   </div>
 </main>
@@ -131,8 +133,8 @@
   <p>Open <button type="button" class="text inline" data-open-settings>Settings</button> and enter your passphrase.</p>
 </div>
 
-<script src="bg.js?v=21"></script>
-<script src="ics.js?v=21"></script>
-<script src="app.js?v=21"></script>
+<script src="bg.js?v=22"></script>
+<script src="ics.js?v=22"></script>
+<script src="app.js?v=22"></script>
 </body>
 </html>

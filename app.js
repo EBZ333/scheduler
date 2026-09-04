@@ -4,7 +4,7 @@ const KEYS = {
   feedCache: 'scheduler.feedCache', schedCache: 'scheduler.schedCache',
   mapping: 'scheduler.blockMap', nicknames: 'scheduler.nicknames', lunch: 'scheduler.lunch',
   custom: 'scheduler.custom', bg: 'scheduler.bg', clockSeconds: 'scheduler.clockSeconds',
-  estimates: 'scheduler.estimates', colors: 'scheduler.colors',
+  colors: 'scheduler.colors', notify: 'scheduler.notify', notified: 'scheduler.notified',
 };
 const DAY = 86400000;
 
@@ -28,12 +28,6 @@ function customOn(k) {
   return out.sort((x, y) => x.start - y.start);
 }
 function customById(id) { return customEvents.find(e => e.id === id); }
-
-// Time estimates per assignment (minutes), keyed by Canvas uid. Default when unset.
-let estimates = loadJSON(KEYS.estimates) || {};
-const DEFAULT_EST = 30;
-function estimateOf(a) { return isExam(a) ? 0 : (estimates[a.uid] ?? DEFAULT_EST); }
-function hasEstimate(a) { return a.uid in estimates; }
 
 // Course colors keyed by schedule class.
 let colors = loadJSON(KEYS.colors) || {};
@@ -326,7 +320,7 @@ function renderList() {
 
   const cutoff = cutoffKey();
   const items = allItems().filter(a => showPast || dayKey(a.due) >= cutoff);
-  $('#list-count').textContent = `${items.length} items`;
+
 
   const groups = new Map();
   for (const a of items) {
@@ -340,7 +334,7 @@ function renderList() {
   const keys = [...groups.keys()].sort((a, b) => a - b);
 
   if (!keys.length) {
-    list.innerHTML = '<p class="empty">Nothing here. Try "Show past" or another course.</p>';
+    list.innerHTML = '<p class="empty">nothing coming up</p>';
     return;
   }
 
@@ -350,10 +344,10 @@ function renderList() {
     const isToday = k === todayKey;
     html += `<div class="day"><h3 class="${isToday ? 'today' : ''}">${escapeHtml(fmtDay(new Date(k)))}</h3>${dayScheduleHtml(k)}`;
     for (const c of customOn(k)) {
-      html += `<div class="item custom" data-edit="${c.id}"><div><div class="title">${escapeHtml(c.title)} <span class="tag">${c.repeat ? 'repeats' : 'yours'}</span></div></div>
+      html += `<div class="item custom" data-edit="${c.id}"><div><div class="title">${escapeHtml(c.title)}${c.repeat ? ' <span class="tag muted">repeats</span>' : ''}</div></div>
         <div class="time">${fmtClock(c.start)} <button type="button" class="text del" data-del="${c.id}" title="remove">×</button></div></div>`;
     }
-    if (!arr.length && !customOn(k).length) html += '<p class="empty small">Nothing due.</p>';
+
     for (const a of arr) {
       const eff = effectiveDue(a);
       const past = eff.due < now && !(a.allDay && !eff.moved && k === todayKey);
@@ -363,21 +357,13 @@ function renderList() {
         ? `<a href="${escapeHtml(a.url)}" target="_blank" rel="noopener">${escapeHtml(a.title)}</a>`
         : escapeHtml(a.title));
 
-      // Block context: does this class meet on the due day? If not, when is the last class before it's due?
+      // Only call out the odd case: the class doesn't meet on the due day.
       let meta = '';
       const block = blockForCourse(a.course);
-      if (block) {
-        if (eff.meeting) {
-          meta = `<span class="tag">${isExam(a) ? 'test in class' : 'due at start of class'}</span>`;
-        } else {
-          const prev = [...schedule].reverse().find(s => s.block === block && s.start < a.due);
-          if (prev) meta = `<span class="tag muted">no class that day · last class ${escapeHtml(prev.start.toLocaleDateString(undefined, { weekday: 'short' }))}</span>`;
-          else meta = `<span class="tag muted">no class that day</span>`;
-        }
-      }
+      if (block && !eff.meeting && !a.allDay) meta = `<span class="tag muted">no class that day</span>`;
 
       html += `<div class="${cls}">
-        <div><div class="title">${title}</div><div class="course" style="${colorStyle(colorForCourse(a.course))}">${escapeHtml(displayCourse(a.course))} ${meta} ${estInput(a)}</div></div>
+        <div><div class="title">${title}</div><div class="course" style="${colorStyle(colorForCourse(a.course))}">${escapeHtml(displayCourse(a.course))} ${meta}</div></div>
         <div class="time">${eff.moved ? escapeHtml(fmtClock(eff.due)) + `<span class="moved" title="Canvas due time">${escapeHtml(fmtTime(a))}</span>` : escapeHtml(fmtTime(a))}</div>
       </div>`;
     }
@@ -569,33 +555,6 @@ function dueOn(k) {
     .map(a => ({ a, eff: effectiveDue(a) })).sort((x, y) => x.eff.due - y.eff.due);
 }
 
-// Small inline minutes field for an assignment's time estimate.
-function estInput(a) {
-  if (isExam(a)) return '';
-  return `<label class="est ${hasEstimate(a) ? '' : 'guess'}" title="time estimate"><input type="text" inputmode="numeric" data-est="${escapeHtml(a.uid)}" value="${estimateOf(a)}">m</label>`;
-}
-
-// Greedy planner: earliest deadline first, filling free slots in order. Each item only goes into
-// time that ends before it is due. Returns { bySlot: Map(slotIndex -> [{x, minutes}]), overflow: [{x, minutes}] }.
-function autoPlan(slots, items) {
-  const cursors = slots.map(s => s.start.getTime());
-  const bySlot = new Map(slots.map((_, i) => [i, []]));
-  const overflow = [];
-  for (const x of [...items].sort((p, q) => p.eff.due - q.eff.due)) {
-    let left = estimateOf(x.a);
-    for (let i = 0; i < slots.length && left > 0; i++) {
-      const s = slots[i];
-      const avail = Math.round((Math.min(s.end.getTime(), x.eff.due.getTime()) - cursors[i]) / 60000);
-      if (avail < 5) continue;
-      const take = Math.min(left, avail);
-      bySlot.get(i).push({ x, minutes: take });
-      cursors[i] += take * 60000; left -= take;
-    }
-    if (left > 0) overflow.push({ x, minutes: left });
-  }
-  return { bySlot, overflow };
-}
-
 // Short course names for the compact summaries: "Biology" -> "Bio", "History 11 (H)" -> "History".
 const SHORT = { biology: 'Bio', chemistry: 'Chem', calculus: 'Calc', physics: 'Physics', precalculus: 'Precalc', engineering: 'Engineering', mathematics: 'Math', literature: 'Lit' };
 function shortCourse(c) {
@@ -614,9 +573,9 @@ function countSummary(list) {
 
 function colorStyle(c) { return c ? `--c:${c}` : ''; }
 
-function workLi(x, extra = '') {
+function workLi(x, extra = '', showCourse = true) {
   const { a, eff } = x;
-  return `<li class="${isExam(a) ? 'exam' : ''}">${dueLink(x)}${estInput(a)}<span class="due">${extra}${a.allDay && !eff.moved ? 'all day' : (isExam(a) ? '' : 'due ') + fmtClock(eff.due)}${eff.moved ? ` <span class="moved">${escapeHtml(fmtTime(a))}</span>` : ''}</span></li>`;
+  return `<li class="${isExam(a) ? 'exam' : ''}">${dueLink(x, showCourse)}<span class="due">${extra}${a.allDay && !eff.moved ? 'all day' : fmtClock(eff.due)}${eff.moved ? ` <span class="moved">${escapeHtml(fmtTime(a))}</span>` : ''}</span></li>`;
 }
 
 function renderPlan() {
@@ -627,86 +586,78 @@ function renderPlan() {
   const slots = freeSlots(evs);
   const dues = dueOn(k);
   $('#plan-date').textContent = fmtDay(planDay);
-  $('#count').textContent = `${dues.length} due`;
 
   const body = $('#plan-body');
   if (!evs.some(e => e.sched)) {
-    body.innerHTML = `<p class="empty">no school this day.</p>` +
+    body.innerHTML = `<p class="empty">no school</p>` +
       (evs.length ? `<div class="tl">${evs.map(r => customRowHtml(r, k, now)).join('')}</div>` : '') +
       (dues.length ? dueListHtml(dues, now) : '');
     return;
   }
   const totalFree = slots.reduce((n, s) => n + s.minutes, 0);
+  const firstClass = evs.find(e => e.sched);
+  const work = dues.filter(x => !isExam(x.a));
   const firstFree = slots[0] ? slots[0].start : null;
-  const work = dues.filter(x => !isExam(x.a));                 // tests happen in class; they're not work to schedule
-  const beforeSchool = work.filter(x => !firstFree || x.eff.due <= firstFree);
-  const inSchool = work.filter(x => firstFree && x.eff.due > firstFree);
-  const plan = autoPlan(slots, inSchool);
-  const workMin = inSchool.reduce((n, x) => n + estimateOf(x.a), 0);
-  const overflowMin = plan.overflow.reduce((n, o) => n + o.minutes, 0);
+  // "before school" only matters when first period is a class (no free time before it) and something is due by then
+  const leadingFree = slots[0] && slots[0].start < firstClass.start;
+  const beforeSchool = leadingFree ? [] : work.filter(x => x.eff.due <= firstClass.start);
+  const inSchool = work.filter(x => !beforeSchool.includes(x) && x.eff.due > (firstFree || firstClass.start));
 
-  const detail = (summaryHtml, listHtml, cls = '') => listHtml
-    ? `<details class="${cls}"><summary>${summaryHtml}</summary>${listHtml}</details>`
+  const detail = (summaryHtml, listHtml) => listHtml
+    ? `<details><summary>${summaryHtml}</summary>${listHtml}</details>`
     : `<div class="what">${summaryHtml}</div>`;
   const ul = (items) => items.length ? `<ul class="work">${items.join('')}</ul>` : '';
 
-  let html = `<p class="hint">${fmtMinutes(totalFree)} free · ${dues.length} due · ${fmtMinutes(workMin)} of work${inSchool.length ? (overflowMin ? ` · <span class="warn">${fmtMinutes(overflowMin)} doesn't fit</span>` : ' · fits') : ''}</p><div class="tl">`;
-  html += `<div class="tl-row before ${beforeSchool.length ? 'warn' : ''} ${k === todayKey && evs[0].start <= now ? 'past' : ''}">
-    <div class="when"><b>before</b>${fmtClock(evs[0].start)}</div>
-    ${detail(`<span class="what">Before school</span><small class="sum">${beforeSchool.length ? countSummary(beforeSchool) : 'nothing due at first period'}</small>`, ul(beforeSchool.map(x => workLi(x))))}
-  </div>`;
-
-  const rows = [...evs.map(e => ({ ...e, kind: e.lunch ? 'lunch' : e.custom ? 'custom' : 'klass' })), ...slots.map((s, i) => ({ ...s, i, kind: 'free', title: `Free · ${fmtMinutes(s.minutes)}` }))].sort((x, y) => x.start - y.start);
+  let html = `<p class="hint">${fmtMinutes(totalFree)} free</p><div class="tl">`;
+  if (beforeSchool.length) {
+    html += `<div class="tl-row before warn ${k === todayKey && firstClass.start <= now ? 'past' : ''}">
+      <div class="when"><b>before</b>${fmtClock(firstClass.start)}</div>
+      ${detail(`<span class="what">before school</span><small class="sum">${countSummary(beforeSchool)}</small>`, ul(beforeSchool.map(x => workLi(x))))}
+    </div>`;
+  }
+  const rows = [...evs.map(e => ({ ...e, kind: e.lunch ? 'lunch' : e.custom ? 'custom' : 'klass' })), ...slots.map((s, i) => ({ ...s, i, kind: 'free', title: `free · ${fmtMinutes(s.minutes)}` }))].sort((x, y) => x.start - y.start);
   for (const r of rows) {
     if (r.kind === 'custom') { html += customRowHtml(r, k, now); continue; }
     const past = k === todayKey && r.end <= now;
     const current = k === todayKey && r.start <= now && now < r.end;
-    let listHtml = '', sum = '', style = '', note = '';
+    let listHtml = '', sum = '', style = '';
     if (r.kind === 'klass') {
-      const list = dues.filter(x => x.eff.meeting === r.sched);
+      const list = dues.filter(x => x.eff.meeting === r.sched && !beforeSchool.includes(x));   // before-school items are listed once, above
       const tests = list.filter(x => isExam(x.a)), hw = list.filter(x => !isExam(x.a));
-      sum = [tests.length ? `${tests.length === 1 ? 'test' : tests.length + ' tests'} in class` : '', hw.length ? `${hw.length} due at start` : ''].filter(Boolean).join(' · ');
-      listHtml = ul([...tests.map(x => workLi(x, 'in class · ')), ...hw.map(x => workLi(x))]);
+      sum = [tests.length ? (tests.length === 1 ? 'test' : `${tests.length} tests`) : '', hw.length ? `${hw.length} due` : ''].filter(Boolean).join(' · ');
+      listHtml = ul([...tests.map(x => workLi(x, '', false)), ...hw.map(x => workLi(x, '', false))]);
       style = colorStyle(colorFor(r.block));
     }
     if (r.kind === 'free') {
-      const alloc = plan.bySlot.get(r.i) || [];
-      const used = alloc.reduce((n, o) => n + o.minutes, 0);
-      sum = alloc.length ? `plan: ${alloc.map(o => `${o.minutes}m ${shortName(o.x)}`).join(', ')} · ${used}/${r.minutes}m` : (inSchool.some(x => x.eff.due > r.start) ? 'nothing left to plan here' : 'nothing else due today');
-      listHtml = ul(alloc.map(o => workLi(o.x, `<b>${o.minutes}m here</b> · `)));
+      const list = inSchool.filter(x => x.eff.due > r.start);
+      sum = list.length ? countSummary(list) : '';
+      listHtml = ul(list.map(x => workLi(x)));
     }
     html += `<div class="tl-row ${r.kind} ${past ? 'past' : ''} ${current ? 'now' : ''}" style="${style}">
       <div class="when"><b>${fmtClock(r.start)}</b>${fmtClock(r.end)}</div>
-      ${detail(`<span class="what">${escapeHtml(r.title)}${current ? '<small>now</small>' : ''}</span>${sum ? `<small class="sum">${escapeHtml(sum)}</small>` : ''}${note}`, listHtml)}
-    </div>`;
-  }
-  if (plan.overflow.length) {
-    html += `<div class="tl-row over warn">
-      <div class="when"><b>after</b>${fmtClock(new Date(Math.max(...evs.map(e => e.end.getTime()))))}</div>
-      ${detail(`<span class="what">Doesn't fit at school</span><small class="sum">${fmtMinutes(overflowMin)} · ${countSummary(plan.overflow.map(o => o.x))}</small>`, ul(plan.overflow.map(o => workLi(o.x, `<b>${o.minutes}m left</b> · `))))}
+      ${detail(`<span class="what">${escapeHtml(r.title)}${current ? '<small>now</small>' : ''}</span>${sum ? `<small class="sum">${escapeHtml(sum)}</small>` : ''}`, listHtml)}
     </div>`;
   }
   html += `</div>`;
   body.innerHTML = html;
 }
-function shortName(x) { const b = blockForCourse(x.a.course); return (b && nicknames[b]) || shortCourse(x.a.course || 'other'); }
 
 function customRowHtml(r, k, now) {
   const past = k === dayKey(now) && r.end <= now;
   return `<div class="tl-row custom ${past ? 'past' : ''}" data-edit="${r.id}">
     <div class="when"><b>${fmtClock(r.start)}</b>${fmtClock(r.end)}</div>
-    <div class="what">${escapeHtml(r.title)}<small>${r.repeat ? 'repeats' : 'yours'}</small></div>
+    <div class="what">${escapeHtml(r.title)}${r.repeat ? '<small>repeats</small>' : ''}</div>
     <button type="button" class="text del" data-del="${r.id}" title="remove">×</button>
   </div>`;
 }
 
-function dueLink(x) {
+function dueLink(x, showCourse = true) {
   const { a } = x;
-  const t = `${isExam(a) ? '<span class="exam-mark">test</span>' : ''}${escapeHtml(a.title)} <small class="c" style="${colorStyle(colorForCourse(a.course))}">${escapeHtml(displayCourse(a.course))}</small>`;
+  const t = `${isExam(a) ? '<span class="exam-mark">test</span>' : ''}${escapeHtml(a.title)}${showCourse ? ` <small class="c" style="${colorStyle(colorForCourse(a.course))}">${escapeHtml(displayCourse(a.course))}</small>` : ''}`;
   return a.url ? `<a href="${escapeHtml(a.url)}" target="_blank" rel="noopener">${t}</a>` : `<span>${t}</span>`;
 }
 function dueListHtml(list, now) {
-  return `<ul class="due-list">${list.map(x => `<li class="${x.eff.due < now ? 'past' : ''} ${isExam(x.a) ? 'exam' : ''}"><div>${dueLink(x)}${estInput(x.a)}</div><div class="c">${x.a.allDay && !x.eff.moved ? 'All day' : fmtClock(x.eff.due)}${x.eff.moved ? ` <span class="moved">${escapeHtml(fmtTime(x.a))}</span>` : ''}</div></li>`).join('')}</ul>`;
+  return `<ul class="due-list">${list.map(x => `<li class="${x.eff.due < now ? 'past' : ''} ${isExam(x.a) ? 'exam' : ''}"><div>${dueLink(x)}</div><div class="c">${x.a.allDay && !x.eff.moved ? 'All day' : fmtClock(x.eff.due)}${x.eff.moved ? ` <span class="moved">${escapeHtml(fmtTime(x.a))}</span>` : ''}</div></li>`).join('')}</ul>`;
 }
 
 /* ---------- Calendar (week) view ---------- */
@@ -722,7 +673,7 @@ function renderCalendar() {
     .filter(a => a.due >= weekStart && a.due < weekEnd)
     .map(a => ({ a, eff: effectiveDue(a) }));
   const sched = schedule.filter(s => s.start >= weekStart && s.start < weekEnd);
-  $('#cal-count').textContent = `${items.length} due this week`;
+
 
   // Days: Mon–Fri, plus Sat/Sun only if something is on them.
   const days = [];
@@ -836,12 +787,9 @@ document.addEventListener('click', (e) => {
   const ed = e.target.closest('[data-edit]'); if (ed && !e.target.closest('a, input, button, summary')) { e.preventDefault(); openEdit(ed.dataset.edit); }
 });
 document.addEventListener('change', (e) => {
-  const inp = e.target.closest('input[data-est]');
-  if (inp) { const m = parseInt(inp.value, 10); if (m > 0) estimates[inp.dataset.est] = m; else delete estimates[inp.dataset.est]; saveJSON(KEYS.estimates, estimates); render(); }
   const col = e.target.closest('input[data-color]');
   if (col) { colors[col.dataset.color] = col.value; saveJSON(KEYS.colors, colors); render(); }
 });
-document.addEventListener('click', (e) => { if (e.target.closest('input[data-est]')) e.stopPropagation(); }, true);
 on('#edit-save', 'click', saveEdit);
 on('#edit-cancel', 'click', closeEdit);
 on('#edit-delete', 'click', () => removeCustom($('#edit').dataset.id));
@@ -881,6 +829,39 @@ on('#cal-range', 'click', () => { weekStart = startOfWeek(new Date()); render();
 on('#plan-prev', 'click', () => { planDay = new Date(planDay.getTime() - DAY); planDayTouched = true; render(); });
 on('#plan-next', 'click', () => { planDay = new Date(planDay.getTime() + DAY); planDayTouched = true; render(); });
 on('#plan-date', 'click', () => { planDay = defaultDay(); planDayTouched = false; render(); });
+
+// Morning notification: once per day at the chosen time, while the page is open somewhere.
+function notifySummary(k) {
+  const evs = dayEvents(k), slots = freeSlots(evs), dues = dueOn(k);
+  if (!evs.some(e => e.sched) && !dues.length) return null;
+  const free = slots.reduce((n, s) => n + s.minutes, 0);
+  const lines = dues.map(x => `${isExam(x.a) ? 'test: ' : ''}${x.a.title} · ${displayCourse(x.a.course)} ${fmtClock(x.eff.due)}`);
+  return { title: `${fmtDay(new Date(k)).replace(/^today · /, '')} · ${fmtMinutes(free)} free`, body: lines.slice(0, 6).join('\n') + (lines.length > 6 ? `\n+${lines.length - 6} more` : '') || 'nothing due' };
+}
+function notifySettings() { return Object.assign({ on: false, time: '07:30' }, loadJSON(KEYS.notify) || {}); }
+async function enableNotify(on) {
+  const s = notifySettings();
+  if (on && 'Notification' in window && Notification.permission !== 'granted') {
+    const p = await Notification.requestPermission();
+    if (p !== 'granted') { on = false; $('#notify-on').checked = false; }
+  }
+  saveJSON(KEYS.notify, { ...s, on });
+}
+function checkNotify() {
+  const s = notifySettings();
+  if (!s.on || !('Notification' in window) || Notification.permission !== 'granted') return;
+  const now = new Date(), today = dayKey(now);
+  const [h, m] = s.time.split(':').map(Number);
+  if (now.getHours() * 60 + now.getMinutes() < h * 60 + m) return;
+  if (localStorage.getItem(KEYS.notified) === String(today)) return;
+  const sum = notifySummary(today);
+  if (!sum) return;
+  try { new Notification(sum.title, { body: sum.body, tag: 'scheduler-morning' }); localStorage.setItem(KEYS.notified, String(today)); } catch (_) {}
+}
+setInterval(checkNotify, 60 * 1000);
+if ($('#notify-on')) { const s = notifySettings(); $('#notify-on').checked = s.on; $('#notify-time').value = s.time; }
+on('#notify-on', 'change', (e) => enableNotify(e.target.checked));
+on('#notify-time', 'change', (e) => { saveJSON(KEYS.notify, { ...notifySettings(), time: e.target.value || '07:30' }); });
 
 // Clock in the top bar.
 function tickClock() {
@@ -943,6 +924,7 @@ setInterval(() => { if (!document.hidden && assignments.length) render(); }, 60 
   if (c1) { try { loadAssignments(c1.text); } catch (_) {} }
   showMeta();
   updateEmptyState();
+  setTimeout(checkNotify, 3000);
   if (p) { $('#passphrase').value = p; unlock(p); }
   else if (!c1 && !c2) toggleSettings(true);
 })();
