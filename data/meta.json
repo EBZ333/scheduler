@@ -1,7 +1,7 @@
 {
- "updated": "2026-09-04T03:34:12.281Z",
+ "updated": "2026-09-04T03:40:55.677Z",
  "feeds": {
   "canvas": "secret not set",
-  "schedule": "error: HTTP 404"
+  "schedule": "ok (560 events, from file)"
  }
 }

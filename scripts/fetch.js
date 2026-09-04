@@ -30,6 +30,18 @@ function decrypt(json) {
   return d.update(buf.subarray(0, buf.length - 16)) + d.final('utf8');
 }
 
+// Keep the encrypted files small: drop alarms and non-recurring events that ended more than 90 days ago.
+function trim(text) {
+  const cutoff = new Date(Date.now() - 90 * 86400000);
+  const stamp = cutoff.getFullYear() * 10000 + (cutoff.getMonth() + 1) * 100 + cutoff.getDate();
+  text = text.replace(/\r\n/g, '\n').replace(/BEGIN:VALARM\n[\s\S]*?END:VALARM\n/g, '');
+  return text.replace(/BEGIN:VEVENT\n[\s\S]*?END:VEVENT\n/g, (ev) => {
+    if (/\nRRULE:/.test(ev)) return ev;
+    const m = ev.match(/\nDT(?:END|START)[^:\n]*:(\d{8})/);
+    return m && +m[1] < stamp ? '' : ev;
+  });
+}
+
 async function main() {
   fs.mkdirSync('data', { recursive: true });
   const meta = { updated: new Date().toISOString(), feeds: {} };
@@ -37,12 +49,23 @@ async function main() {
 
   for (const [name, url] of Object.entries(feeds)) {
     const file = `data/${name}.enc`;
-    if (!url) { meta.feeds[name] = 'secret not set'; console.warn(`${name}: no URL secret set, skipping`); continue; }
+    const localFile = process.env[name.toUpperCase() + '_FILE']; // e.g. SCHEDULE_FILE=path.ics to encrypt a local export
+    if (!url && !localFile) {
+      meta.feeds[name] = fs.existsSync(file) ? 'using committed file' : 'secret not set';
+      console.warn(`${name}: no URL secret set, ${fs.existsSync(file) ? 'keeping committed file' : 'skipping'}`);
+      continue;
+    }
     try {
-      const res = await fetch(url, { redirect: 'follow', headers: { 'User-Agent': 'scheduler-fetch' } });
-      const text = await res.text();
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      let text;
+      if (localFile) {
+        text = fs.readFileSync(localFile, 'utf8');
+      } else {
+        const res = await fetch(url, { redirect: 'follow', headers: { 'User-Agent': 'scheduler-fetch' } });
+        text = await res.text();
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      }
       if (!text.includes('BEGIN:VCALENDAR')) throw new Error('response is not an ICS calendar (is the calendar shared / URL correct?)');
+      text = trim(text);
 
       // Only rewrite when the content changed, so the repo isn't committed to every hour.
       let unchanged = false;
@@ -51,7 +74,7 @@ async function main() {
       }
       if (!unchanged) fs.writeFileSync(file, encrypt(text));
       const events = (text.match(/BEGIN:VEVENT/g) || []).length;
-      meta.feeds[name] = `ok (${events} events)`;
+      meta.feeds[name] = `ok (${events} events${localFile ? ', from file' : ''})`;
       console.log(`${name}: ${events} events${unchanged ? ', unchanged' : ''}`);
     } catch (e) {
       failed = true;

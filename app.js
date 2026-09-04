@@ -103,16 +103,41 @@ function populateCourses() {
 
 const BLOCK_RE = /\bblock\s*(\d+)\b/i;
 
+// Key that identifies "the same class" across schedule events: "Block 3" if the title has one,
+// otherwise the title itself (e.g. "Latin 4 (H) -  US-3").
+function classKey(summary) {
+  const m = (summary || '').match(BLOCK_RE);
+  return m ? 'Block ' + m[1] : (summary || '').trim();
+}
+// Shorter label: drop a trailing " - SECTION" code.
+function classLabel(key) { return key.replace(/\s+-\s+[^-]*$/, '').trim(); }
+
+// Guess which Canvas course a schedule class is, by word overlap.
+function normTokens(s) {
+  return new Set(s.toLowerCase().replace(/\(h\)/g, ' honors ').replace(/\bhon\b/g, 'honors')
+    .replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter(w => w && !['the', 'of', 'and', 'us', 'a'].includes(w)));
+}
+function guessCourse(key, cs) {
+  const t = normTokens(classLabel(key));
+  let best = null, bestScore = 0;
+  for (const c of cs) {
+    const u = normTokens(c);
+    let inter = 0; for (const w of t) if (u.has(w)) inter++;
+    const score = inter / Math.max(1, Math.min(t.size, u.size));
+    if (score > bestScore) { bestScore = score; best = c; }
+  }
+  return bestScore >= 0.5 ? best : null;
+}
+
 function loadSchedule(text) {
   const events = ICS.parse(text);
   const now = new Date();
   const rangeStart = new Date(now.getTime() - 60 * DAY);
   const rangeEnd = new Date(now.getTime() + 365 * DAY);
   schedule = ICS.expand(events, rangeStart, rangeEnd).map(ev => {
-    const m = (ev.summary || '').match(BLOCK_RE);
     return {
       title: ev.summary || '(untitled)',
-      block: m ? 'Block ' + m[1] : null,
+      block: classKey(ev.summary),
       start: ev.instance,
       end: ev.end ? ev.end.date : null,
       allDay: ev.start.allDay,
@@ -124,13 +149,16 @@ function loadSchedule(text) {
 }
 
 function blockNames() {
-  const set = new Set(schedule.map(s => s.block).filter(Boolean));
-  return [...set].sort((a, b) => +a.split(' ')[1] - +b.split(' ')[1]);
+  const counts = new Map();
+  for (const s of schedule) if (s.block) counts.set(s.block, (counts.get(s.block) || 0) + 1);
+  const num = (k) => { const m = k.match(BLOCK_RE); return m ? +m[1] : Infinity; };
+  // Most frequent first (classes), then meetings/assemblies; Block N numerically.
+  return [...counts.keys()].sort((a, b) => (num(a) - num(b)) || (counts.get(b) - counts.get(a)) || a.localeCompare(b));
 }
 
 // course -> block (inverse of blockMap)
 function blockForCourse(course) {
-  for (const [block, c] of Object.entries(blockMap)) if (c === course) return block;
+  for (const [block, c] of Object.entries(blockMap)) if (c && c === course) return block;
   return null;
 }
 
@@ -140,9 +168,15 @@ function renderMapping() {
   if (!blocks.length) { box.hidden = true; return; }
   box.hidden = false;
   const cs = courses();
+  // Auto-guess unmapped classes once courses are known.
+  let changed = false;
+  for (const b of blocks) {
+    if (!(b in blockMap) && cs.length) { const g = guessCourse(b, cs); blockMap[b] = g || ''; changed = true; }
+  }
+  if (changed) saveJSON(KEYS.mapping, blockMap);
   $('#mapping-rows').innerHTML = blocks.map(b => `
     <label class="map-row">
-      <span>${escapeHtml(b)}</span>
+      <span title="${escapeHtml(b)}">${escapeHtml(classLabel(b))}</span>
       <select data-block="${escapeHtml(b)}">
         <option value="">— not a Canvas class —</option>
         ${cs.map(c => `<option value="${escapeHtml(c)}" ${blockMap[b] === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
@@ -153,7 +187,7 @@ function renderMapping() {
   $('#mapping-rows').querySelectorAll('select').forEach(sel => {
     sel.addEventListener('change', () => {
       const b = sel.dataset.block;
-      if (sel.value) blockMap[b] = sel.value; else delete blockMap[b];
+      blockMap[b] = sel.value;
       saveJSON(KEYS.mapping, blockMap);
       render();
     });
@@ -187,7 +221,7 @@ function dayScheduleHtml(k) {
   return `<div class="blocks">${items.map(s => {
     const cls = s.block ? 'chip block' : 'chip';
     const course = s.block && blockMap[s.block];
-    const label = course ? `${s.block} · ${course}` : s.title;
+    const label = course ? classLabel(s.block) : classLabel(s.title);
     const time = s.allDay ? '' : `<small>${fmtClock(s.start)}</small>`;
     return `<span class="${cls}" title="${escapeHtml(s.title)}">${escapeHtml(label)} ${time}</span>`;
   }).join('')}</div>`;
@@ -241,11 +275,11 @@ function render() {
       if (block) {
         const meetsThatDay = scheduleForDay(k).find(s => s.block === block);
         if (meetsThatDay) {
-          meta = `<span class="tag">${escapeHtml(block)}${meetsThatDay.allDay ? '' : ' at ' + fmtClock(meetsThatDay.start)}</span>`;
+          meta = `<span class="tag">class${meetsThatDay.allDay ? '' : ' at ' + fmtClock(meetsThatDay.start)}</span>`;
         } else {
           const prev = [...schedule].reverse().find(s => s.block === block && s.start < a.due);
-          if (prev) meta = `<span class="tag muted">no ${escapeHtml(block)} that day · last class ${escapeHtml(prev.start.toLocaleDateString(undefined, { weekday: 'short' }))}</span>`;
-          else meta = `<span class="tag muted">no ${escapeHtml(block)} that day</span>`;
+          if (prev) meta = `<span class="tag muted">no class that day · last class ${escapeHtml(prev.start.toLocaleDateString(undefined, { weekday: 'short' }))}</span>`;
+          else meta = `<span class="tag muted">no class that day</span>`;
         }
       }
 

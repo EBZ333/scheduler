@@ -20,10 +20,14 @@
     const lines = unfold(text).split('\n');
     const events = [];
     let cur = null;
+    let nested = 0; // depth inside VALARM etc. within an event
     for (const line of lines) {
-      if (line === 'BEGIN:VEVENT') { cur = {}; continue; }
+      if (line === 'BEGIN:VEVENT') { cur = {}; nested = 0; continue; }
       if (line === 'END:VEVENT') { if (cur) events.push(cur); cur = null; continue; }
       if (!cur) continue;
+      if (line.startsWith('BEGIN:')) { nested++; continue; }
+      if (line.startsWith('END:')) { nested--; continue; }
+      if (nested > 0) continue;
       const idx = line.indexOf(':');
       if (idx < 0) continue;
       const head = line.slice(0, idx);
