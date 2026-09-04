@@ -411,33 +411,34 @@ function dueHtml(x, now, extraAttr = '') {
 
 /* ---------- Wiring ---------- */
 
-document.querySelectorAll('.seg button').forEach(b => b.addEventListener('click', () => {
-  view = b.dataset.view; localStorage.setItem('scheduler.view', view); render();
-}));
-$('#cal-prev').addEventListener('click', () => { weekStart = new Date(weekStart.getTime() - 7 * DAY); render(); });
-$('#cal-next').addEventListener('click', () => { weekStart = new Date(weekStart.getTime() + 7 * DAY); render(); });
-$('#cal-today').addEventListener('click', () => { weekStart = startOfWeek(new Date()); render(); });
+// Tolerate a missing element (e.g. a stale cached index.html) instead of aborting all wiring.
+function on(sel, evt, fn) { document.querySelectorAll(sel).forEach(el => el.addEventListener(evt, fn)); }
 
-$('#unlock-form').addEventListener('submit', (e) => {
+on('.seg button', 'click', (e) => { view = e.currentTarget.dataset.view; localStorage.setItem('scheduler.view', view); render(); });
+on('#cal-prev', 'click', () => { weekStart = new Date(weekStart.getTime() - 7 * DAY); render(); });
+on('#cal-next', 'click', () => { weekStart = new Date(weekStart.getTime() + 7 * DAY); render(); });
+on('#cal-today', 'click', () => { weekStart = startOfWeek(new Date()); render(); });
+
+on('#unlock-form', 'submit', (e) => {
   e.preventDefault();
   unlock($('#passphrase').value);
 });
-$('#feed-file').addEventListener('change', async (e) => {
+on('#feed-file', 'change', async (e) => {
   const f = e.target.files[0];
   if (f) { loadAssignments(await f.text()); setStatus('#status', `Loaded ${assignments.length} Canvas items from file.`); }
 });
-$('#sched-file').addEventListener('change', async (e) => {
+on('#sched-file', 'change', async (e) => {
   const f = e.target.files[0];
   if (f) { loadSchedule(await f.text()); setStatus('#status', `Loaded ${schedule.length} schedule events from file.`); }
 });
-$('#show-past').addEventListener('change', render);
-$('#course-filter').addEventListener('change', render);
-$('#refresh').addEventListener('click', () => {
+on('#show-past', 'change', render);
+on('#course-filter', 'change', render);
+on('#refresh', 'click', () => {
   const p = localStorage.getItem(KEYS.pass);
   showMeta();
   if (p) unlock(p); else setStatus('#status', 'Enter your passphrase first.', true);
 });
-$('#forget').addEventListener('click', () => {
+on('#forget', 'click', () => {
   Object.values(KEYS).forEach(k => localStorage.removeItem(k));
   assignments = []; schedule = []; blockMap = {};
   $('#results').hidden = true;
@@ -445,6 +446,19 @@ $('#forget').addEventListener('click', () => {
   $('#passphrase').value = '';
   setStatus('#status', 'Forgot passphrase and cached data.');
 });
+
+// Auto-refresh: re-pull the encrypted data every 30 minutes and whenever the tab becomes visible again
+// (the GitHub Action refreshes the feeds hourly). Also re-render each minute so "now" markers move.
+function autoRefresh() {
+  const p = localStorage.getItem(KEYS.pass);
+  if (p && !document.hidden) { showMeta(); unlock(p); }
+}
+setInterval(autoRefresh, 30 * 60 * 1000);
+let lastRefresh = Date.now();
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && Date.now() - lastRefresh > 5 * 60 * 1000) { lastRefresh = Date.now(); autoRefresh(); }
+});
+setInterval(() => { if (!document.hidden && assignments.length) render(); }, 60 * 1000);
 
 // Boot: show cached data instantly, then refresh from the repo if we have the passphrase.
 (function boot() {
