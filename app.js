@@ -3,13 +3,18 @@ const KEYS = {
   pass: 'scheduler.passphrase',
   feedCache: 'scheduler.feedCache', schedCache: 'scheduler.schedCache',
   mapping: 'scheduler.blockMap', nicknames: 'scheduler.nicknames', lunch: 'scheduler.lunch',
+  custom: 'scheduler.custom', bg: 'scheduler.bg',
 };
 const DAY = 86400000;
 
 let assignments = [];   // from Canvas
 let schedule = [];      // expanded schedule instances: {title, block, start, end, allDay}
 let blockMap = loadJSON(KEYS.mapping) || {};   // { "Latin 4 (H) -  US-3": "Latin 4 (H) / Latin 5 (H)", ... }
-let nicknames = loadJSON(KEYS.nicknames) || {}; // { "Latin 4 (H) -  US-3": "latin", ... }
+let nicknames = loadJSON(KEYS.nicknames) || {};
+// User-created events from the quick-add box: [{ id, title, start (ms), end (ms) }]
+let customEvents = (loadJSON(KEYS.custom) || []).map(e => ({ ...e, start: new Date(e.start), end: new Date(e.end) }));
+function saveCustom() { saveJSON(KEYS.custom, customEvents.map(e => ({ ...e, start: e.start.getTime(), end: e.end.getTime() }))); }
+function customOn(k) { return customEvents.filter(e => dayKey(e.start) === k).sort((x, y) => x.start - y.start); } // { "Latin 4 (H) -  US-3": "latin", ... }
 
 function loadJSON(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (_) { return null; } }
 function saveJSON(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} }
@@ -301,6 +306,7 @@ function renderList() {
     if (!groups.has(k)) groups.set(k, []);
     groups.get(k).push(a);
   }
+  for (const c of customEvents) { const k = dayKey(c.start); if (k >= cutoff && !groups.has(k)) groups.set(k, []); }
   // Always show today's schedule, even with nothing due.
   if (schedule.length && !groups.has(cutoff) && !showPast) groups.set(cutoff, []);
   const keys = [...groups.keys()].sort((a, b) => a - b);
@@ -315,7 +321,11 @@ function renderList() {
     const arr = groups.get(k);
     const isToday = k === todayKey;
     html += `<div class="day"><h3 class="${isToday ? 'today' : ''}">${escapeHtml(fmtDay(new Date(k)))}</h3>${dayScheduleHtml(k)}`;
-    if (!arr.length) html += '<p class="empty small">Nothing due.</p>';
+    for (const c of customOn(k)) {
+      html += `<div class="item custom"><div><div class="title">${escapeHtml(c.title)} <span class="tag">yours</span></div></div>
+        <div class="time">${fmtClock(c.start)} <button type="button" class="text del" data-del="${c.id}" title="remove">×</button></div></div>`;
+    }
+    if (!arr.length && !customOn(k).length) html += '<p class="empty small">Nothing due.</p>';
     for (const a of arr) {
       const eff = effectiveDue(a);
       const past = eff.due < now && !(a.allDay && !eff.moved && k === todayKey);
@@ -348,6 +358,69 @@ function renderList() {
   list.innerHTML = html;
 }
 
+/* ---------- Quick add ---------- */
+
+const DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+
+// "calc test study saturday 4pm for 2h" -> { title, start, end }. Returns null if nothing usable.
+function parseQuickAdd(text, now = new Date()) {
+  let s = ' ' + text.trim().toLowerCase().replace(/\s+/g, ' ') + ' ';
+  let day = null, time = null, dur = 60;
+
+  const take = (re, fn) => { const m = s.match(re); if (m) { fn(m); s = s.replace(m[0], ' '); } };
+
+  // duration: "for 2h", "for 90 min", "2 hours"
+  take(/ (?:for )?(\d+(?:\.\d+)?) ?(h|hr|hrs|hour|hours|m|min|mins|minutes) /, m => { const n = +m[1]; dur = /^h/.test(m[2]) ? n * 60 : n; });
+  // day words
+  const today = dayKey(now);
+  take(/ (today|tonight) /, () => { day = today; });
+  take(/ (tomorrow|tmrw|tmr) /, () => { day = today + DAY; });
+  take(/ (?:(next|this) )?(sun|mon|tue|tues|wed|thu|thur|thurs|fri|sat)[a-z]* /, m => {
+    const target = DAYS.findIndex(d => d.startsWith(m[2].slice(0, 3)));
+    let diff = (target - now.getDay() + 7) % 7;
+    if (diff === 0 && (m[1] === 'next' || afterSchool(now))) diff = 7;
+    day = today + diff * DAY;
+  });
+  // dates: "9/12", "sep 12", "12 sep"
+  take(/ (\d{1,2})\/(\d{1,2}) /, m => { const d = new Date(now.getFullYear(), +m[1] - 1, +m[2]); if (d < now - 30 * DAY) d.setFullYear(d.getFullYear() + 1); day = dayKey(d); });
+  take(/ (jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]* (\d{1,2}) /, m => { day = dayKey(new Date(now.getFullYear(), MONTHS.indexOf(m[1].slice(0, 3)), +m[2])); });
+  take(/ (\d{1,2}) (jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]* /, m => { day = dayKey(new Date(now.getFullYear(), MONTHS.indexOf(m[2].slice(0, 3)), +m[1])); });
+  // time: "at 4", "4pm", "4:30 pm", "16:00"
+  take(/ (?:at )?(\d{1,2})(?::(\d{2}))? ?(am|pm)?(?= )/, m => {
+    let h = +m[1], mi = +(m[2] || 0);
+    if (m[3] === 'pm' && h < 12) h += 12; if (m[3] === 'am' && h === 12) h = 0;
+    if (!m[3] && !m[2] && h >= 1 && h <= 7) h += 12;       // bare "4" means 4 pm
+    if (h > 23 || mi > 59) return;
+    time = [h, mi];
+  });
+
+  const title = s.replace(/ (on|at|for|the) /g, ' ').trim() || (day !== null || time ? 'event' : '');
+  if (!title) return null;
+  if (day === null) day = today;
+  if (!time) {
+    // default: after school on a school day, midday otherwise
+    const d = new Date(day);
+    time = isSchoolDay(day) ? [Math.floor((schoolHours.end + 10) / 60), (schoolHours.end + 10) % 60] : [12, 0];
+  }
+  const start = new Date(day); start.setHours(time[0], time[1], 0, 0);
+  const end = new Date(start.getTime() + dur * 60000);
+  return { title: title.replace(/^./, c => c), start, end };
+}
+
+function quickAdd(text) {
+  const ev = parseQuickAdd(text);
+  if (!ev) return false;
+  customEvents.push({ id: Date.now().toString(36), ...ev });
+  saveCustom();
+  // Jump the views to the new event's day.
+  planDay = new Date(dayKey(ev.start)); planDayTouched = true;
+  weekStart = startOfWeek(ev.start);
+  render();
+  return ev;
+}
+function removeCustom(id) { customEvents = customEvents.filter(e => e.id !== id); saveCustom(); render(); }
+
 /* ---------- Free time ---------- */
 
 const BUFFER_MIN = 5;
@@ -369,9 +442,11 @@ function dayEvents(k) {
   const evs = scheduleForDay(k).filter(s => !s.allDay).map(s => ({
     title: classLabel(s.title), start: s.start, end: s.end || new Date(s.start.getTime() + 45 * 60000), block: s.block, sched: s,
   }));
-  if (!evs.length) return [];
-  const d = new Date(k);
-  evs.push({ title: LUNCH.title, start: new Date(d.getFullYear(), d.getMonth(), d.getDate(), ...LUNCH.start), end: new Date(d.getFullYear(), d.getMonth(), d.getDate(), ...LUNCH.end), lunch: true });
+  if (evs.length) {
+    const d = new Date(k);
+    evs.push({ title: LUNCH.title, start: new Date(d.getFullYear(), d.getMonth(), d.getDate(), ...LUNCH.start), end: new Date(d.getFullYear(), d.getMonth(), d.getDate(), ...LUNCH.end), lunch: true });
+  }
+  for (const c of customOn(k)) evs.push({ title: c.title, start: c.start, end: c.end, custom: true, id: c.id });
   return evs.sort((x, y) => x.start - y.start);
 }
 
@@ -399,11 +474,13 @@ function schoolBounds(k) {
 
 // Free slots within school hours, with BUFFER_MIN trimmed off each side of every event.
 function freeSlots(evs) {
-  if (!evs.length) return [];
+  if (!evs.some(e => e.sched)) return [];   // no classes that day: no school free time to compute
   const buf = BUFFER_MIN * 60000;
-  const [b0, b1] = schoolBounds(dayKey(evs[0].start));
-  const dayStart = new Date(Math.min(b0.getTime(), evs[0].start.getTime()));
-  const dayEnd = Math.max(b1.getTime(), ...evs.map(e => e.end.getTime()));
+  const classes = evs.filter(e => e.sched);
+  const [b0, b1] = schoolBounds(dayKey(classes[0].start));
+  // Bounds come from school hours and classes only; custom events can subtract free time but never extend the day.
+  const dayStart = new Date(Math.min(b0.getTime(), classes[0].start.getTime()));
+  const dayEnd = Math.max(b1.getTime(), ...classes.map(e => e.end.getTime()));
   const busy = evs.map(e => [e.start.getTime() - buf, e.end.getTime() + buf]);
   busy.push([dayStart.getTime() - 1, dayStart.getTime()], [dayEnd, dayEnd + 1]); // sentinels so leading/trailing gaps count
   busy.sort((x, y) => x[0] - y[0]);
@@ -453,8 +530,10 @@ function renderPlan() {
   $('#count').textContent = `${dues.length} due`;
 
   const body = $('#plan-body');
-  if (!evs.length) {
-    body.innerHTML = `<p class="empty">No school this day.</p>` + (dues.length ? dueListHtml(dues, now) : '');
+  if (!evs.some(e => e.sched)) {
+    body.innerHTML = `<p class="empty">no school this day.</p>` +
+      (evs.length ? `<div class="tl">${evs.map(r => customRowHtml(r, k, now)).join('')}</div>` : '') +
+      (dues.length ? dueListHtml(dues, now) : '');
     return;
   }
   const totalFree = slots.reduce((n, s) => n + s.minutes, 0);
@@ -473,8 +552,9 @@ function renderPlan() {
     ${detail(`<span class="what">Before school</span><small class="sum">${beforeSchool.length ? countSummary(beforeSchool) : 'nothing due at first period'}</small>`, beforeSchool)}
   </div>`;
 
-  const rows = [...evs.map(e => ({ ...e, kind: e.lunch ? 'lunch' : 'klass' })), ...slots.map(s => ({ ...s, kind: 'free', title: `Free · ${fmtMinutes(s.minutes)}` }))].sort((x, y) => x.start - y.start);
+  const rows = [...evs.map(e => ({ ...e, kind: e.lunch ? 'lunch' : e.custom ? 'custom' : 'klass' })), ...slots.map(s => ({ ...s, kind: 'free', title: `Free · ${fmtMinutes(s.minutes)}` }))].sort((x, y) => x.start - y.start);
   for (const r of rows) {
+    if (r.kind === 'custom') { html += customRowHtml(r, k, now); continue; }
     const past = k === todayKey && r.end <= now;
     const current = k === todayKey && r.start <= now && now < r.end;
     let list = [], sum = '';
@@ -487,6 +567,15 @@ function renderPlan() {
   }
   html += `</div>`;
   body.innerHTML = html;
+}
+
+function customRowHtml(r, k, now) {
+  const past = k === dayKey(now) && r.end <= now;
+  return `<div class="tl-row custom ${past ? 'past' : ''}">
+    <div class="when"><b>${fmtClock(r.start)}</b>${fmtClock(r.end)}</div>
+    <div class="what">${escapeHtml(r.title)}<small>yours</small></div>
+    <button type="button" class="text del" data-del="${r.id}" title="remove">×</button>
+  </div>`;
 }
 
 function dueLink(x) {
@@ -518,12 +607,13 @@ function renderCalendar() {
   for (let i = 0; i < 7; i++) {
     const d = new Date(weekStart.getTime() + i * DAY);
     const k = dayKey(d);
-    const has = sched.some(s => dayKey(s.start) === k) || items.some(x => dayKey(x.eff.due) === k);
+    const has = sched.some(s => dayKey(s.start) === k) || items.some(x => dayKey(x.eff.due) === k) || customOn(k).length;
     if (i < 5 || has) days.push({ d, k });
   }
 
   // Hour range from the timed content, defaulting to 8–16.
-  const timed = [...sched.filter(s => !s.allDay).map(s => [s.start, s.end || s.start]), ...items.filter(x => !(x.a.allDay && !x.eff.moved)).map(x => [x.eff.due, x.eff.due])];
+  const timed = [...sched.filter(s => !s.allDay).map(s => [s.start, s.end || s.start]), ...items.filter(x => !(x.a.allDay && !x.eff.moved)).map(x => [x.eff.due, x.eff.due]),
+    ...customEvents.filter(c => c.start >= weekStart && c.start < weekEnd).map(c => [c.start, c.end])];
   let h0 = 8, h1 = 16;
   for (const [s, e] of timed) { h0 = Math.min(h0, s.getHours()); h1 = Math.max(h1, e.getHours() + (e.getMinutes() > 0 ? 1 : 0)); }
   const HOUR = 56; // px
@@ -563,6 +653,11 @@ function renderCalendar() {
         <div class="tm">${fmtClock(s.start)}–${fmtClock(end)}</div>
         ${dues.map(x => dueHtml(x, now)).join('')}
       </div>`;
+    }
+    for (const c of customOn(k)) {
+      html += `<div class="cal-ev custom" style="top:${top(c.start)}px;height:${Math.max(22, top(c.end) - top(c.start) - 2)}px" title="${escapeHtml(c.title)}">
+        <div class="t">${escapeHtml(c.title)}</div><div class="tm">${fmtClock(c.start)}–${fmtClock(c.end)}</div>
+        <button type="button" class="del" data-del="${c.id}" title="remove">×</button></div>`;
     }
     // Timed assignments not attached to a class meeting.
     for (const x of items.filter(x => dayKey(x.eff.due) === k && !x.eff.meeting && !x.a.allDay)) {
@@ -607,6 +702,20 @@ function toggleSettings(open) {
 function on(sel, evt, fn) { document.querySelectorAll(sel).forEach(el => el.addEventListener(evt, fn)); }
 
 on('#settings-toggle', 'click', () => toggleSettings());
+on('#quick', 'submit', (e) => {
+  e.preventDefault();
+  const inp = $('#quick-input');
+  const ev = quickAdd(inp.value);
+  if (ev) { inp.value = ''; inp.placeholder = `added: ${ev.title} · ${fmtDay(ev.start)} ${fmtClock(ev.start)}`.toLowerCase(); setTimeout(() => { inp.placeholder = 'add: calc test study saturday 4pm'; }, 4000); }
+  else { inp.classList.add('shake'); setTimeout(() => inp.classList.remove('shake'), 400); }
+});
+document.addEventListener('click', (e) => { const b = e.target.closest('[data-del]'); if (b) { e.preventDefault(); removeCustom(b.dataset.del); } });
+if (window.BG) {
+  const bg = localStorage.getItem(KEYS.bg) || 'none';
+  BG.set(bg);
+  if ($('#bg-style')) $('#bg-style').value = bg;
+  on('#bg-style', 'change', (e) => { localStorage.setItem(KEYS.bg, e.target.value); BG.set(e.target.value); });
+}
 if ($('#lunch-start')) { $('#lunch-start').value = hhmm(LUNCH.start); $('#lunch-end').value = hhmm(LUNCH.end); }
 on('#lunch-start', 'change', setLunchFromInputs);
 on('#lunch-end', 'change', setLunchFromInputs);

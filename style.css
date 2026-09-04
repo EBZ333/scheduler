@@ -70,6 +70,20 @@ input[type=checkbox] { accent-color: var(--ink); }
 #settings-toggle[aria-expanded="true"] { text-decoration: underline; }
 #refresh { padding: 0.4rem 0.9rem; font-size: 0.85rem; }
 
+/* ---------- quick add ---------- */
+.quick { flex: 1; max-width: 420px; }
+.quick input { width: 100%; background: transparent; border: 0; border-bottom: 2px solid var(--hair); padding: 0.35rem 0; outline: none; font-size: 0.9rem; }
+.quick input:focus { border-bottom-color: var(--ink); }
+.quick input::placeholder { color: var(--ink-3); font-weight: 500; }
+.quick input.shake { animation: shake 0.4s; }
+@keyframes shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+
+/* ---------- background canvas ---------- */
+#bg { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+.bar, .panel, main, .corner, .empty-state { position: relative; z-index: 1; }
+.bar { position: sticky; }
+.corner { position: fixed; }
+
 /* ---------- settings panel ---------- */
 .panel { border-bottom: 2px solid var(--line); background: var(--fill); }
 .panel-inner { max-width: 1400px; margin: 0 auto; padding: 1.5rem 1.25rem; display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; }
@@ -88,10 +102,10 @@ input[type=time] { background: transparent; border: 0; border-bottom: 2px solid 
 
 /* ---------- main / sub bar ---------- */
 main { max-width: 1400px; margin: 0 auto; padding: 1.25rem 1.25rem 6rem; }
-.subbar { display: flex; align-items: baseline; gap: 1rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
-.subbar h1 { font-size: clamp(1.4rem, 3vw, 2.2rem); cursor: pointer; }
-.nav { display: flex; gap: 2px; }
-.nav button { padding: 0.35rem 0.7rem; font-size: 0.9rem; }
+.subbar { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
+.subbar h1 { font-size: clamp(1.4rem, 3vw, 2.2rem); cursor: pointer; line-height: 1; }
+.nav { display: flex; gap: 2px; align-self: stretch; }
+.nav button { padding: 0 0.8rem; font-size: 1.2rem; line-height: 1; display: flex; align-items: center; }
 .count { color: var(--ink-3); font-size: 0.9rem; }
 .empty-state { max-width: 1400px; margin: 0 auto; padding: 4rem 1.25rem; }
 .empty-state h1 { font-size: clamp(2rem, 6vw, 4rem); margin-bottom: 0.5rem; }
@@ -140,6 +154,15 @@ main { max-width: 1400px; margin: 0 auto; padding: 1.25rem 1.25rem 6rem; }
   background: repeating-linear-gradient(-45deg, transparent 0 5px, var(--hatch) 5px 7px); }
 .cal-free span { background: var(--bg); padding: 0 3px; }
 .cal-now { position: absolute; left: 0; right: 0; height: 2px; background: var(--accent); z-index: 3; }
+
+/* ---------- custom events ---------- */
+.cal-ev.custom { background: transparent; border: 2px solid var(--accent); color: var(--ink); }
+.cal-ev.custom .del, .tl-row.custom .del, .item.custom .del { position: absolute; top: 0; right: 0; background: transparent; color: var(--ink-3); padding: 0.1rem 0.4rem; font-size: 0.9rem; }
+.tl-row.custom::before { background: var(--accent); border-color: var(--accent); }
+.tl-row.custom .del { top: 0.5rem; }
+.item.custom .del { position: static; }
+.item.custom .title { color: var(--ink); }
+.tag { background: var(--ink); }
 
 /* ---------- free-time plan ---------- */
 .tl { border-left: 2px solid var(--line); margin-left: 5.2rem; }

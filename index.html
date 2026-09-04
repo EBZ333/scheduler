@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Scheduler</title>
-<link rel="stylesheet" href="style.css?v=11">
+<link rel="stylesheet" href="style.css?v=12">
 </head>
 <body>
 
@@ -14,6 +14,9 @@
     <button type="button" data-view="calendar">Calendar</button>
     <button type="button" data-view="list">List</button>
   </nav>
+  <form id="quick" class="quick" autocomplete="off">
+    <input id="quick-input" type="text" placeholder="add: calc test study saturday 4pm" aria-label="Quick add">
+  </form>
   <div class="controls">
     <button id="refresh" type="button" title="Re-fetch data">refresh</button>
     <button id="settings-toggle" type="button" class="text" aria-expanded="false">Settings</button>
@@ -37,6 +40,20 @@
         <label class="file-row"><span>Schedule</span><input id="sched-file" type="file" accept=".ics,text/calendar"></label>
       </details>
       <p><button id="forget" type="button" class="text danger">Forget passphrase and cached data</button></p>
+    </section>
+
+    <section>
+      <h2>Background</h2>
+      <p class="hint">Reacts to the mouse. Monochrome, sits behind everything.</p>
+      <div class="row">
+        <select id="bg-style" aria-label="Background">
+          <option value="none">none</option>
+          <option value="dots">dots</option>
+          <option value="grid">grid</option>
+          <option value="constellation">constellation</option>
+          <option value="ripple">ripple</option>
+        </select>
+      </div>
     </section>
 
     <section>
@@ -98,7 +115,8 @@
   <p>Open <button type="button" class="text inline" data-open-settings>Settings</button> and enter your passphrase.</p>
 </div>
 
-<script src="ics.js?v=11"></script>
-<script src="app.js?v=11"></script>
+<script src="bg.js?v=12"></script>
+<script src="ics.js?v=12"></script>
+<script src="app.js?v=12"></script>
 </body>
 </html>
