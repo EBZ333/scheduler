@@ -1,7 +1,7 @@
 {
- "updated": "2026-09-04T03:40:55.677Z",
+ "updated": "2026-09-04T03:43:14.055Z",
  "feeds": {
-  "canvas": "secret not set",
-  "schedule": "ok (560 events, from file)"
+  "canvas": "ok (41 events)",
+  "schedule": "using committed file"
  }
 }
