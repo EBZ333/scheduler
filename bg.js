@@ -1,5 +1,5 @@
 // Reactive monochrome backgrounds on a fixed full-screen canvas behind the page.
-// Styles: none | dots | constellation | water | smoke | boids | soccer | pong | orbit | chain | marbles | ribbon | bubbles
+// Styles: none | dots | constellation | water | smoke | boids | soccer | pong | orbit | bubbles | fluid | fluid mono | fluid amber (fluid.js)
 (function (global) {
   const canvas = document.createElement('canvas');
   canvas.id = 'bg';
@@ -316,72 +316,6 @@
     ctx.globalAlpha = 1;
   }
 
-  /* ================= chain (a rope hanging from the cursor, verlet physics) ================= */
-  function initChain() {
-    const n = 34, seg = 12;
-    state.pts = Array.from({ length: n }, (_, i) => ({ x: W / 2, y: 200 + i * seg, ox: W / 2, oy: 200 + i * seg }));
-    state.seg = seg;
-  }
-  function drawChain() {
-    const P = state.pts, seg = state.seg, ax = mouse.active ? eased.x : W / 2, ay = mouse.active ? eased.y : 120;
-    for (let i = 1; i < P.length; i++) { const p = P[i], vx = (p.x - p.ox) * 0.985, vy = (p.y - p.oy) * 0.985; p.ox = p.x; p.oy = p.y; p.x += vx; p.y += vy + 0.6; }
-    P[0].x = ax; P[0].y = ay;
-    for (let it = 0; it < 12; it++) {
-      for (let i = 0; i < P.length - 1; i++) {
-        const a = P[i], b = P[i + 1], dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1, diff = (d - seg) / d;
-        if (i === 0) { b.x -= dx * diff; b.y -= dy * diff; } else { a.x += dx * diff * 0.5; a.y += dy * diff * 0.5; b.x -= dx * diff * 0.5; b.y -= dy * diff * 0.5; }
-      }
-      for (let i = 1; i < P.length; i++) { const p = P[i]; if (p.y > H - 6) p.y = H - 6; if (p.x < 6) p.x = 6; if (p.x > W - 6) p.x = W - 6; }
-    }
-    withShadow(() => {
-      ctx.strokeStyle = ink(); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.lineWidth = 5;
-      ctx.beginPath(); P.forEach((p, k) => k ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke();
-      ctx.fillStyle = ink(); const e = P[P.length - 1]; ctx.beginPath(); ctx.arc(e.x, e.y, 11, 0, Math.PI * 2); ctx.fill();
-    }, 8, 3, 5, 0.4);
-  }
-
-  /* ================= marbles (balls with gravity; the cursor shoves them) ================= */
-  function initMarbles() {
-    state.m = Array.from({ length: 22 }, () => ({ x: 40 + Math.random() * (W - 80), y: 100 + Math.random() * (H * 0.5), vx: (Math.random() - 0.5) * 2, vy: 0, r: 10 + Math.random() * 12 }));
-  }
-  function drawMarbles() {
-    const M = state.m, floor = H - 4, mvx = mouse.x - prev.x, mvy = mouse.y - prev.y;
-    for (const m of M) {
-      m.vy += 0.35; m.x += m.vx; m.y += m.vy; m.vx *= 0.995;
-      if (m.y + m.r > floor) { m.y = floor - m.r; m.vy = -m.vy * 0.55; m.vx *= 0.9; if (Math.abs(m.vy) < 0.8) m.vy = 0; }
-      if (m.x - m.r < 0) { m.x = m.r; m.vx = -m.vx * 0.7; } if (m.x + m.r > W) { m.x = W - m.r; m.vx = -m.vx * 0.7; }
-      if (mouse.active) { const dx = m.x - eased.x, dy = m.y - eased.y, d = Math.hypot(dx, dy); if (d < m.r + 16) { const nx = dx / (d || 1), ny = dy / (d || 1); m.vx += nx * 2 + mvx * 0.4; m.vy += ny * 2 + mvy * 0.4; } }
-    }
-    for (let i = 0; i < M.length; i++) for (let j = i + 1; j < M.length; j++) {
-      const a = M[i], b = M[j], dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1, min = a.r + b.r;
-      if (d < min) {
-        const nx = dx / d, ny = dy / d, ov = (min - d) / 2; a.x -= nx * ov; a.y -= ny * ov; b.x += nx * ov; b.y += ny * ov;
-        const p = (a.vx - b.vx) * nx + (a.vy - b.vy) * ny; if (p > 0) { a.vx -= p * nx * 0.9; a.vy -= p * ny * 0.9; b.vx += p * nx * 0.9; b.vy += p * ny * 0.9; }
-      }
-    }
-    const PAPER = paper(), INK = ink(), dark = isDark();
-    withShadow(() => { ctx.fillStyle = PAPER; for (const m of M) { ctx.beginPath(); ctx.arc(m.x, m.y, m.r, 0, Math.PI * 2); ctx.fill(); } }, 10, 3, 5, dark ? 0.8 : 0.35);
-    ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.fillStyle = INK;
-    for (const m of M) { ctx.beginPath(); ctx.arc(m.x, m.y, m.r, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 0.9; ctx.beginPath(); ctx.arc(m.x - m.r * 0.35, m.y - m.r * 0.35, m.r * 0.2, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; }
-  }
-
-  /* ================= ribbon (a calligraphic stroke that follows the cursor and fades) ================= */
-  function initRibbon() { state.pts = []; }
-  function drawRibbon() {
-    const P = state.pts, sp = Math.hypot(mouse.x - prev.x, mouse.y - prev.y);
-    if (mouse.active && sp > 0.5) P.push({ x: mouse.x, y: mouse.y, w: Math.max(2, 26 - sp * 0.8), life: 1 });
-    for (const p of P) p.life -= 0.006;
-    while (P.length && P[0].life <= 0) P.shift();
-    if (P.length < 2) return;
-    ctx.fillStyle = ink(); ctx.strokeStyle = ink(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    for (let i = 1; i < P.length; i++) {
-      const a = P[i - 1], b = P[i];
-      ctx.globalAlpha = Math.min(a.life, b.life) * 0.85; ctx.lineWidth = (a.w + b.w) / 2;
-      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-    }
-    ctx.globalAlpha = 1;
-  }
-
   /* ================= bubbles (rise slowly; touch to pop) ================= */
   function initBubbles() { state.b = []; state.pops = []; state.next = 0; }
   function drawBubbles() {
@@ -435,8 +369,42 @@
   }
 
   /* ================= runtime ================= */
-  const DRAW = { dots: drawDots, constellation: drawConstellation, water: drawWater, smoke: drawSmoke, boids: drawBoids, soccer: drawSoccer, pong: drawPong, orbit: drawOrbit, chain: drawChain, marbles: drawMarbles, ribbon: drawRibbon, bubbles: drawBubbles };
-  const INIT = { constellation: initConstellation, water: initWater, smoke: initSmoke, boids: initBoids, soccer: initSoccer, pong: initPong, orbit: initOrbit, chain: initChain, marbles: initMarbles, ribbon: initRibbon, bubbles: initBubbles };
+  const DRAW = { dots: drawDots, constellation: drawConstellation, water: drawWater, smoke: drawSmoke, boids: drawBoids, soccer: drawSoccer, pong: drawPong, orbit: drawOrbit, bubbles: drawBubbles };
+  const INIT = { constellation: initConstellation, water: initWater, smoke: initSmoke, boids: initBoids, soccer: initSoccer, pong: initPong, orbit: initOrbit, bubbles: initBubbles };
+
+  /* ================= WebGL fluid (PavelDoGreat's simulation, see fluid.js) ================= */
+  const FLUID = {
+    'fluid':       { RANDOM_COLORS: true,  COLORFUL: true,  SUNRAYS: true,  CURL: 6 },
+    'fluid mono':  { MONO: true,           COLORFUL: true,  SUNRAYS: false, CURL: 10 },
+    'fluid amber': { RANDOM_COLORS: false, SPLAT_HUE: 0.1, COLORFUL: false, SUNRAYS: true, CURL: 4 },
+  };
+  const FLUID_BASE = {
+    SIM_RESOLUTION: 128, DYE_RESOLUTION: 1024, CAPTURE_RESOLUTION: 512,
+    DENSITY_DISSIPATION: 1, VELOCITY_DISSIPATION: 0.6, PRESSURE: 0.6, PRESSURE_ITERATIONS: 20, CURL: 6,
+    SPLAT_RADIUS: 0.2, SPLAT_FORCE: 6000, SHADING: true, COLORFUL: true, COLOR_UPDATE_SPEED: 10, PAUSED: false,
+    BACK_COLOR: { r: 0, g: 0, b: 0 }, TRANSPARENT: false,
+    BLOOM: false, BLOOM_ITERATIONS: 8, BLOOM_RESOLUTION: 256, BLOOM_INTENSITY: 0.8, BLOOM_THRESHOLD: 0.6, BLOOM_SOFT_KNEE: 0.7,
+    SUNRAYS: true, SUNRAYS_RESOLUTION: 196, SUNRAYS_WEIGHT: 1.0, RANDOM_COLORS: true, SPLAT_HUE: 0,
+  };
+  let fluid = null, fluidCanvas = null;
+  function pageBack() { const m = paper().match(/\d+/g) || [255, 255, 255]; return { r: +m[0], g: +m[1], b: +m[2] }; }
+  function startFluid(name) {
+    if (!global.Fluid) return;
+    if (!fluidCanvas) {
+      fluidCanvas = document.createElement('canvas'); fluidCanvas.id = 'fluid'; fluidCanvas.setAttribute('aria-hidden', 'true');
+      document.body.prepend(fluidCanvas);
+    }
+    fluidCanvas.hidden = false;
+    const cfg = Object.assign({}, FLUID_BASE, FLUID[name], { BACK_COLOR: pageBack() });
+    // In light mode a greyscale dye is invisible over white, so tint it toward the accent instead.
+    if (cfg.MONO && !isDark()) { cfg.MONO = false; cfg.RANDOM_COLORS = false; cfg.SPLAT_HUE = 0.1; }
+    fluid = global.Fluid.start(fluidCanvas, cfg);
+  }
+  function stopFluid() {
+    if (fluid) { fluid.stop(); fluid = null; }
+    if (fluidCanvas) { fluidCanvas.hidden = true; }
+  }
+  matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => { if (fluid) { stopFluid(); startFluid(style); } });
 
   function frame() {
     frameNo++;
@@ -449,6 +417,12 @@
   function start() { if (style !== 'none' && !raf && !reduce) raf = requestAnimationFrame(frame); }
   function stop() { cancelAnimationFrame(raf); raf = 0; }
   function set(name) {
+    stopFluid();
+    if (FLUID[name]) {
+      style = name; stop(); state = {}; ctx.clearRect(0, 0, W, H); canvas.hidden = true;
+      if (!reduce) startFluid(name);
+      return;
+    }
     style = DRAW[name] ? name : 'none';
     stop(); state = {}; ctx.clearRect(0, 0, W, H);
     canvas.hidden = style === 'none';
@@ -456,5 +430,5 @@
   }
 
   resize();
-  global.BG = { set, styles: ['none', ...Object.keys(DRAW)] };
+  global.BG = { set, styles: ['none', ...Object.keys(DRAW), ...Object.keys(FLUID)] };
 })(window);
