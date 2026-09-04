@@ -1,5 +1,5 @@
 // Reactive monochrome backgrounds on a fixed full-screen canvas behind the page.
-// Styles: none | dots | constellation | water | smoke | boids | soccer | pong | cars
+// Styles: none | dots | constellation | water | smoke | boids | soccer | pong | orbit | chain | marbles | ribbon | bubbles
 (function (global) {
   const canvas = document.createElement('canvas');
   canvas.id = 'bg';
@@ -290,68 +290,122 @@
     scoreText(`${state.score[0]} – ${state.score[1]}`);
   }
 
-  /* ================= cars (top-down: drive toward the cursor, knock over cones) ================= */
-  function initCars() {
-    state.car = { x: W / 2, y: H / 2, a: 0, v: 0, drift: 0 };
-    state.marks = [];
-    state.cones = Array.from({ length: 9 }, () => ({ x: 60 + Math.random() * (W - 120), y: 90 + Math.random() * (H - 160), vx: 0, vy: 0, rot: 0, vr: 0, down: false }));
-    state.cars = Array.from({ length: 3 }, (_, i) => ({ x: Math.random() * W, y: 100 + Math.random() * (H - 200), a: Math.random() * Math.PI * 2, v: 2.2 + i * 0.4, t: Math.random() * 100 }));
+  /* ================= orbit (the cursor is a star; planets orbit it and leave trails) ================= */
+  function initOrbit() {
+    state.p = Array.from({ length: 14 }, (_, i) => {
+      const r = 90 + i * 28, a = Math.random() * Math.PI * 2, v = Math.sqrt(2600 / r);
+      return { x: W / 2 + Math.cos(a) * r, y: H / 2 + Math.sin(a) * r, vx: -Math.sin(a) * v, vy: Math.cos(a) * v, s: 2 + Math.random() * 3, trail: [] };
+    });
+    state.sun = { x: W / 2, y: H / 2 };
   }
-  function drawCars() {
-    const c = state.car, INK = ink(), PAPER = paper(), dark = isDark();
-    // --- steering physics: turn toward the cursor, accelerate when far, brake when near
-    if (mouse.active) {
-      const dx = eased.x - c.x, dy = eased.y - c.y, dist = Math.hypot(dx, dy), ta = Math.atan2(dy, dx);
-      const diff = Math.atan2(Math.sin(ta - c.a), Math.cos(ta - c.a));
-      const steer = Math.max(-0.06, Math.min(0.06, diff * 0.25)) * Math.min(1, c.v / 2);
-      c.a += steer;
-      const want = Math.min(9, dist / 25);
-      c.v += (want - c.v) * (want > c.v ? 0.05 : 0.12);
-      c.drift = c.drift * 0.85 + Math.abs(steer) * c.v * 0.6;
-    } else c.v *= 0.96;
-    c.x += Math.cos(c.a) * c.v; c.y += Math.sin(c.a) * c.v;
-    if (c.x < 20) { c.x = 20; c.v *= 0.5; } if (c.x > W - 20) { c.x = W - 20; c.v *= 0.5; } if (c.y < 70) { c.y = 70; c.v *= 0.5; } if (c.y > H - 20) { c.y = H - 20; c.v *= 0.5; }
-    // tire marks when cornering hard
-    if (c.drift > 1.6 && c.v > 3) for (const s of [-1, 1]) state.marks.push({ x: c.x - Math.cos(c.a) * 12 + Math.cos(c.a + Math.PI / 2) * 8 * s, y: c.y - Math.sin(c.a) * 12 + Math.sin(c.a + Math.PI / 2) * 8 * s, life: 1 });
-    if (state.marks.length > 1500) state.marks.splice(0, state.marks.length - 1500);
-    // --- traffic: wander, avoid the player's car
-    for (const o of state.cars) {
-      o.t += 0.02; o.a += Math.sin(o.t) * 0.02;
-      const dx = o.x - c.x, dy = o.y - c.y, d = Math.hypot(dx, dy);
-      if (d < 110) { const away = Math.atan2(dy, dx); o.a += Math.atan2(Math.sin(away - o.a), Math.cos(away - o.a)) * 0.08; }
-      o.x += Math.cos(o.a) * o.v; o.y += Math.sin(o.a) * o.v;
-      if (o.x < -30) o.x = W + 30; if (o.x > W + 30) o.x = -30; if (o.y < 40) { o.y = 40; o.a = -o.a; } if (o.y > H + 30) o.y = 40;
+  function drawOrbit() {
+    const S = state.sun, G = 2600;
+    if (mouse.active) { S.x += (eased.x - S.x) * 0.08; S.y += (eased.y - S.y) * 0.08; }
+    ctx.strokeStyle = ink(); ctx.fillStyle = ink(); ctx.lineWidth = 1;
+    for (const p of state.p) {
+      const dx = S.x - p.x, dy = S.y - p.y, d2 = Math.max(400, dx * dx + dy * dy), d = Math.sqrt(d2), f = G / d2;
+      p.vx += (dx / d) * f; p.vy += (dy / d) * f;
+      const sp = Math.hypot(p.vx, p.vy); if (sp > 9) { p.vx *= 9 / sp; p.vy *= 9 / sp; }
+      p.x += p.vx; p.y += p.vy;
+      p.trail.push([p.x, p.y]); if (p.trail.length > 70) p.trail.shift();
+      ctx.globalAlpha = 0.25; ctx.beginPath(); p.trail.forEach(([x, y], k) => k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke();
+      ctx.globalAlpha = 0.9; ctx.beginPath(); ctx.arc(p.x, p.y, p.s, 0, Math.PI * 2); ctx.fill();
     }
-    // --- cones
-    for (const k of state.cones) {
-      const dx = k.x - c.x, dy = k.y - c.y, d = Math.hypot(dx, dy);
-      if (d < 22 && c.v > 1) { k.vx = (dx / d) * c.v * 0.9 + Math.cos(c.a) * c.v * 0.6; k.vy = (dy / d) * c.v * 0.9 + Math.sin(c.a) * c.v * 0.6; k.vr = (Math.random() - 0.5) * 0.6; k.down = true; }
-      k.x += k.vx; k.y += k.vy; k.rot += k.vr; k.vx *= 0.9; k.vy *= 0.9; k.vr *= 0.92;
-      k.x = Math.max(10, Math.min(W - 10, k.x)); k.y = Math.max(70, Math.min(H - 10, k.y));
-    }
-    // --- draw
-    ctx.strokeStyle = INK; ctx.lineCap = 'round'; ctx.lineWidth = 3;
-    for (const m of state.marks) { m.life -= 0.0015; ctx.globalAlpha = Math.max(0, m.life) * 0.35; ctx.beginPath(); ctx.arc(m.x, m.y, 1.5, 0, Math.PI * 2); ctx.fillStyle = INK; ctx.fill(); }
-    state.marks = state.marks.filter(m => m.life > 0);
+    ctx.globalAlpha = 1; ctx.beginPath(); ctx.arc(S.x, S.y, 9, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 0.15; ctx.beginPath(); ctx.arc(S.x, S.y, 22, 0, Math.PI * 2); ctx.fill();
     ctx.globalAlpha = 1;
-    const drawCar = (o, len, wid, fill) => {
-      ctx.save(); ctx.translate(o.x, o.y); ctx.rotate(o.a);
-      withShadow(() => { ctx.fillStyle = fill; ctx.fillRect(-len / 2, -wid / 2, len, wid); }, 10, 4, 6, dark ? 0.8 : 0.35);
-      ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.strokeRect(-len / 2, -wid / 2, len, wid);
-      ctx.fillStyle = INK; ctx.globalAlpha = 0.85;
-      ctx.fillRect(len * 0.05, -wid / 2 + 3, len * 0.28, wid - 6);        // windshield
-      ctx.fillRect(-len / 2 + 3, -wid / 2 + 3, len * 0.18, wid - 6);     // rear window
-      ctx.globalAlpha = 1;
-      for (const s of [-1, 1]) { ctx.fillRect(-len / 2 + 4, s * wid / 2 - (s > 0 ? 4 : 0), 8, 4); ctx.fillRect(len / 2 - 12, s * wid / 2 - (s > 0 ? 4 : 0), 8, 4); }
-      ctx.restore();
-    };
-    for (const o of state.cars) drawCar(o, 34, 18, dark ? '#333' : '#ddd');
-    for (const k of state.cones) {
-      ctx.save(); ctx.translate(k.x, k.y); ctx.rotate(k.rot);
-      withShadow(() => { ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--accent').trim() || '#ffb000'; ctx.beginPath(); if (k.down) { ctx.moveTo(-9, -5); ctx.lineTo(9, 0); ctx.lineTo(-9, 5); } else { ctx.moveTo(0, -9); ctx.lineTo(8, 7); ctx.lineTo(-8, 7); } ctx.closePath(); ctx.fill(); }, 6, 2, 3, 0.35);
-      ctx.restore();
+  }
+
+  /* ================= chain (a rope hanging from the cursor, verlet physics) ================= */
+  function initChain() {
+    const n = 34, seg = 12;
+    state.pts = Array.from({ length: n }, (_, i) => ({ x: W / 2, y: 200 + i * seg, ox: W / 2, oy: 200 + i * seg }));
+    state.seg = seg;
+  }
+  function drawChain() {
+    const P = state.pts, seg = state.seg, ax = mouse.active ? eased.x : W / 2, ay = mouse.active ? eased.y : 120;
+    for (let i = 1; i < P.length; i++) { const p = P[i], vx = (p.x - p.ox) * 0.985, vy = (p.y - p.oy) * 0.985; p.ox = p.x; p.oy = p.y; p.x += vx; p.y += vy + 0.6; }
+    P[0].x = ax; P[0].y = ay;
+    for (let it = 0; it < 12; it++) {
+      for (let i = 0; i < P.length - 1; i++) {
+        const a = P[i], b = P[i + 1], dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1, diff = (d - seg) / d;
+        if (i === 0) { b.x -= dx * diff; b.y -= dy * diff; } else { a.x += dx * diff * 0.5; a.y += dy * diff * 0.5; b.x -= dx * diff * 0.5; b.y -= dy * diff * 0.5; }
+      }
+      for (let i = 1; i < P.length; i++) { const p = P[i]; if (p.y > H - 6) p.y = H - 6; if (p.x < 6) p.x = 6; if (p.x > W - 6) p.x = W - 6; }
     }
-    drawCar(c, 40, 20, PAPER);
+    withShadow(() => {
+      ctx.strokeStyle = ink(); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.lineWidth = 5;
+      ctx.beginPath(); P.forEach((p, k) => k ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.stroke();
+      ctx.fillStyle = ink(); const e = P[P.length - 1]; ctx.beginPath(); ctx.arc(e.x, e.y, 11, 0, Math.PI * 2); ctx.fill();
+    }, 8, 3, 5, 0.4);
+  }
+
+  /* ================= marbles (balls with gravity; the cursor shoves them) ================= */
+  function initMarbles() {
+    state.m = Array.from({ length: 22 }, () => ({ x: 40 + Math.random() * (W - 80), y: 100 + Math.random() * (H * 0.5), vx: (Math.random() - 0.5) * 2, vy: 0, r: 10 + Math.random() * 12 }));
+  }
+  function drawMarbles() {
+    const M = state.m, floor = H - 4, mvx = mouse.x - prev.x, mvy = mouse.y - prev.y;
+    for (const m of M) {
+      m.vy += 0.35; m.x += m.vx; m.y += m.vy; m.vx *= 0.995;
+      if (m.y + m.r > floor) { m.y = floor - m.r; m.vy = -m.vy * 0.55; m.vx *= 0.9; if (Math.abs(m.vy) < 0.8) m.vy = 0; }
+      if (m.x - m.r < 0) { m.x = m.r; m.vx = -m.vx * 0.7; } if (m.x + m.r > W) { m.x = W - m.r; m.vx = -m.vx * 0.7; }
+      if (mouse.active) { const dx = m.x - eased.x, dy = m.y - eased.y, d = Math.hypot(dx, dy); if (d < m.r + 16) { const nx = dx / (d || 1), ny = dy / (d || 1); m.vx += nx * 2 + mvx * 0.4; m.vy += ny * 2 + mvy * 0.4; } }
+    }
+    for (let i = 0; i < M.length; i++) for (let j = i + 1; j < M.length; j++) {
+      const a = M[i], b = M[j], dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1, min = a.r + b.r;
+      if (d < min) {
+        const nx = dx / d, ny = dy / d, ov = (min - d) / 2; a.x -= nx * ov; a.y -= ny * ov; b.x += nx * ov; b.y += ny * ov;
+        const p = (a.vx - b.vx) * nx + (a.vy - b.vy) * ny; if (p > 0) { a.vx -= p * nx * 0.9; a.vy -= p * ny * 0.9; b.vx += p * nx * 0.9; b.vy += p * ny * 0.9; }
+      }
+    }
+    const PAPER = paper(), INK = ink(), dark = isDark();
+    withShadow(() => { ctx.fillStyle = PAPER; for (const m of M) { ctx.beginPath(); ctx.arc(m.x, m.y, m.r, 0, Math.PI * 2); ctx.fill(); } }, 10, 3, 5, dark ? 0.8 : 0.35);
+    ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.fillStyle = INK;
+    for (const m of M) { ctx.beginPath(); ctx.arc(m.x, m.y, m.r, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 0.9; ctx.beginPath(); ctx.arc(m.x - m.r * 0.35, m.y - m.r * 0.35, m.r * 0.2, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; }
+  }
+
+  /* ================= ribbon (a calligraphic stroke that follows the cursor and fades) ================= */
+  function initRibbon() { state.pts = []; }
+  function drawRibbon() {
+    const P = state.pts, sp = Math.hypot(mouse.x - prev.x, mouse.y - prev.y);
+    if (mouse.active && sp > 0.5) P.push({ x: mouse.x, y: mouse.y, w: Math.max(2, 26 - sp * 0.8), life: 1 });
+    for (const p of P) p.life -= 0.006;
+    while (P.length && P[0].life <= 0) P.shift();
+    if (P.length < 2) return;
+    ctx.fillStyle = ink(); ctx.strokeStyle = ink(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    for (let i = 1; i < P.length; i++) {
+      const a = P[i - 1], b = P[i];
+      ctx.globalAlpha = Math.min(a.life, b.life) * 0.85; ctx.lineWidth = (a.w + b.w) / 2;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  /* ================= bubbles (rise slowly; touch to pop) ================= */
+  function initBubbles() { state.b = []; state.pops = []; state.next = 0; }
+  function drawBubbles() {
+    const B = state.b;
+    if (frameNo >= state.next && B.length < 40) { state.next = frameNo + 12 + Math.random() * 30; B.push({ x: 30 + Math.random() * (W - 60), y: H + 30, r: 10 + Math.random() * 26, vx: 0, wob: Math.random() * Math.PI * 2 }); }
+    const INK = ink(), dark = isDark();
+    for (const b of B) {
+      b.wob += 0.03; b.vx += Math.sin(b.wob) * 0.02; b.vx *= 0.98; b.x += b.vx; b.y -= 0.35 + 8 / b.r;
+      if (mouse.active && Math.hypot(b.x - eased.x, b.y - eased.y) < b.r + 4) { b.dead = true; state.pops.push({ x: b.x, y: b.y, r: b.r, t: 0 }); }
+      if (b.y < -40) b.dead = true;
+    }
+    state.b = B.filter(b => !b.dead);
+    withShadow(() => {
+      ctx.strokeStyle = INK; ctx.lineWidth = 1.5;
+      for (const b of state.b) { ctx.globalAlpha = 0.7; ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 0.5; ctx.beginPath(); ctx.arc(b.x, b.y, b.r * 0.72, Math.PI * 1.15, Math.PI * 1.55); ctx.stroke(); }
+    }, 8, 3, 5, dark ? 0.6 : 0.25);
+    ctx.globalAlpha = 1;
+    for (const p of state.pops) {
+      p.t += 1; const k = p.t / 14;
+      ctx.strokeStyle = INK; ctx.globalAlpha = (1 - k) * 0.8; ctx.lineWidth = 2;
+      for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4, r0 = p.r + k * 14, r1 = r0 + 6; ctx.beginPath(); ctx.moveTo(p.x + Math.cos(a) * r0, p.y + Math.sin(a) * r0); ctx.lineTo(p.x + Math.cos(a) * r1, p.y + Math.sin(a) * r1); ctx.stroke(); }
+    }
+    state.pops = state.pops.filter(p => p.t < 14);
+    ctx.globalAlpha = 1;
   }
 
   /* ================= boids (a flock that follows the cursor) ================= */
@@ -381,8 +435,8 @@
   }
 
   /* ================= runtime ================= */
-  const DRAW = { dots: drawDots, constellation: drawConstellation, water: drawWater, smoke: drawSmoke, boids: drawBoids, soccer: drawSoccer, pong: drawPong, cars: drawCars };
-  const INIT = { constellation: initConstellation, water: initWater, smoke: initSmoke, boids: initBoids, soccer: initSoccer, pong: initPong, cars: initCars };
+  const DRAW = { dots: drawDots, constellation: drawConstellation, water: drawWater, smoke: drawSmoke, boids: drawBoids, soccer: drawSoccer, pong: drawPong, orbit: drawOrbit, chain: drawChain, marbles: drawMarbles, ribbon: drawRibbon, bubbles: drawBubbles };
+  const INIT = { constellation: initConstellation, water: initWater, smoke: initSmoke, boids: initBoids, soccer: initSoccer, pong: initPong, orbit: initOrbit, chain: initChain, marbles: initMarbles, ribbon: initRibbon, bubbles: initBubbles };
 
   function frame() {
     frameNo++;
