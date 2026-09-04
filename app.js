@@ -2,13 +2,14 @@ const $ = (s) => document.querySelector(s);
 const KEYS = {
   pass: 'scheduler.passphrase',
   feedCache: 'scheduler.feedCache', schedCache: 'scheduler.schedCache',
-  mapping: 'scheduler.blockMap',
+  mapping: 'scheduler.blockMap', nicknames: 'scheduler.nicknames', lunch: 'scheduler.lunch',
 };
 const DAY = 86400000;
 
 let assignments = [];   // from Canvas
 let schedule = [];      // expanded schedule instances: {title, block, start, end, allDay}
-let blockMap = loadJSON(KEYS.mapping) || {};   // { "Block 1": "AP US History", ... }
+let blockMap = loadJSON(KEYS.mapping) || {};   // { "Latin 4 (H) -  US-3": "Latin 4 (H) / Latin 5 (H)", ... }
+let nicknames = loadJSON(KEYS.nicknames) || {}; // { "Latin 4 (H) -  US-3": "latin", ... }
 
 function loadJSON(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (_) { return null; } }
 function saveJSON(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} }
@@ -92,14 +93,7 @@ function courses() {
   return [...new Set(assignments.map(a => a.course).filter(Boolean))].sort();
 }
 
-function populateCourses() {
-  const sel = $('#course-filter');
-  const current = sel.value;
-  const cs = courses();
-  sel.innerHTML = '<option value="">All courses</option>' +
-    cs.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
-  sel.value = cs.includes(current) ? current : '';
-}
+function populateCourses() {}
 
 /* ---------- Schedule ---------- */
 
@@ -112,7 +106,9 @@ function classKey(summary) {
   return m ? 'Block ' + m[1] : (summary || '').trim();
 }
 // Shorter label: drop a trailing " - SECTION" code.
-function classLabel(key) { return key.replace(/\s+-\s+[^-]*$/, '').trim(); }
+function classLabel(key) { return nicknames[key] || key.replace(/\s+-\s+[^-]*$/, '').trim(); }
+// Display name for a Canvas course: the nickname of the schedule class mapped to it, else the course name.
+function displayCourse(course) { const b = blockForCourse(course); return (b && nicknames[b]) || course; }
 
 // Guess which Canvas course a schedule class is, by word overlap.
 function normTokens(s) {
@@ -179,14 +175,23 @@ function renderMapping() {
   }
   if (changed) saveJSON(KEYS.mapping, blockMap);
   $('#mapping-rows').innerHTML = blocks.map(b => `
-    <label class="map-row">
-      <span title="${escapeHtml(b)}">${escapeHtml(classLabel(b))}</span>
+    <div class="map-row">
+      <span title="${escapeHtml(b)}">${escapeHtml(b.replace(/\s+-\s+[^-]*$/, '').trim())}</span>
       <select data-block="${escapeHtml(b)}">
         <option value="">— not a Canvas class —</option>
         ${cs.map(c => `<option value="${escapeHtml(c)}" ${blockMap[b] === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
         ${blockMap[b] && !cs.includes(blockMap[b]) ? `<option value="${escapeHtml(blockMap[b])}" selected>${escapeHtml(blockMap[b])}</option>` : ''}
       </select>
-    </label>`).join('');
+      <input type="text" class="nick" data-block="${escapeHtml(b)}" value="${escapeHtml(nicknames[b] || '')}" placeholder="nickname">
+    </div>`).join('');
+  $('#mapping-rows').querySelectorAll('input.nick').forEach(inp => {
+    inp.addEventListener('input', () => {
+      const b = inp.dataset.block, v = inp.value.trim();
+      if (v) nicknames[b] = v; else delete nicknames[b];
+      saveJSON(KEYS.nicknames, nicknames);
+      render();
+    });
+  });
   if (!cs.length) $('#mapping-rows').insertAdjacentHTML('afterbegin', '<p class="hint">Load Canvas first to get the list of courses.</p>');
   $('#mapping-rows').querySelectorAll('select').forEach(sel => {
     sel.addEventListener('change', () => {
@@ -277,8 +282,8 @@ function render() {
 }
 
 function renderList() {
-  const showPast = $('#show-past').checked;
-  const course = $('#course-filter').value;
+  const showPast = false;
+  const course = '';
   const now = new Date();
   const todayKey = dayKey(now);
   const list = $('#list');
@@ -334,7 +339,7 @@ function renderList() {
       }
 
       html += `<div class="${cls}">
-        <div><div class="title">${title}</div><div class="course">${escapeHtml(a.course)} ${meta}</div></div>
+        <div><div class="title">${title}</div><div class="course">${escapeHtml(displayCourse(a.course))} ${meta}</div></div>
         <div class="time">${eff.moved ? escapeHtml(fmtClock(eff.due)) + `<span class="moved" title="Canvas due time">${escapeHtml(fmtTime(a))}</span>` : escapeHtml(fmtTime(a))}</div>
       </div>`;
     }
@@ -346,7 +351,17 @@ function renderList() {
 /* ---------- Free time ---------- */
 
 const BUFFER_MIN = 5;
-const LUNCH = { start: [11, 50], end: [12, 10], title: 'Lunch' };
+const LUNCH = Object.assign({ start: [11, 50], end: [12, 10] }, loadJSON(KEYS.lunch) || {});
+LUNCH.title = 'Lunch';
+function hhmm(arr) { return String(arr[0]).padStart(2, '0') + ':' + String(arr[1]).padStart(2, '0'); }
+function setLunchFromInputs() {
+  const s = $('#lunch-start').value, e = $('#lunch-end').value;
+  if (!s || !e) return;
+  LUNCH.start = s.split(':').map(Number); LUNCH.end = e.split(':').map(Number);
+  if (LUNCH.end[0] * 60 + LUNCH.end[1] <= LUNCH.start[0] * 60 + LUNCH.start[1]) return;
+  saveJSON(KEYS.lunch, { start: LUNCH.start, end: LUNCH.end });
+  render();
+}
 const MIN_FREE_MIN = 10;
 
 // Timed events for a school day, including lunch. Returns [] on days with no classes.
@@ -406,7 +421,7 @@ function fmtMinutes(m) { return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60 ? (m 
 
 // Assignments due on day k, with effective due times, sorted.
 function dueOn(k) {
-  const course = $('#course-filter').value;
+  const course = '';
   return assignments.filter(a => dayKey(a.due) === k && (!course || a.course === course))
     .map(a => ({ a, eff: effectiveDue(a) })).sort((x, y) => x.eff.due - y.eff.due);
 }
@@ -423,7 +438,7 @@ function shortCourse(c) {
 // "3 Bio, 1 History"
 function countSummary(list) {
   const c = new Map();
-  for (const x of list) { const s = shortCourse(x.a.course || 'other'); c.set(s, (c.get(s) || 0) + 1); }
+  for (const x of list) { const b = blockForCourse(x.a.course); const s = (b && nicknames[b]) || shortCourse(x.a.course || 'other'); c.set(s, (c.get(s) || 0) + 1); }
   return [...c.entries()].sort((x, y) => y[1] - x[1]).map(([s, n]) => `${n} ${s}`).join(', ');
 }
 
@@ -476,7 +491,7 @@ function renderPlan() {
 
 function dueLink(x) {
   const { a } = x;
-  const t = `${escapeHtml(a.title)} <small class="c">${escapeHtml(a.course)}</small>`;
+  const t = `${escapeHtml(a.title)} <small class="c">${escapeHtml(displayCourse(a.course))}</small>`;
   return a.url ? `<a href="${escapeHtml(a.url)}" target="_blank" rel="noopener">${t}</a>` : `<span>${t}</span>`;
 }
 function dueListHtml(list, now) {
@@ -486,7 +501,7 @@ function dueListHtml(list, now) {
 /* ---------- Calendar (week) view ---------- */
 
 function renderCalendar() {
-  const course = $('#course-filter').value;
+  const course = '';
   const now = new Date();
   const todayKey = dayKey(now);
   const weekEnd = new Date(weekStart.getTime() + 7 * DAY);
@@ -566,7 +581,7 @@ function dueHtml(x, now, extraAttr = '') {
   const { a, eff } = x;
   const past = eff.due < now && !(a.allDay && !eff.moved && dayKey(a.due) === dayKey(now));
   const loose = extraAttr ? ' loose' : '';
-  const tip = `${a.title} · ${a.course}` + (eff.moved ? ` · Canvas says ${fmtTime(a)}` : '');
+  const tip = `${a.title} · ${displayCourse(a.course)}` + (eff.moved ? ` · Canvas says ${fmtTime(a)}` : '');
   const inner = `${eff.meeting || a.allDay ? '' : fmtClock(eff.due) + ' '}${escapeHtml(a.title)}`;
   return a.url
     ? `<a class="cal-due${past ? ' past' : ''}${loose}" ${extraAttr} href="${escapeHtml(a.url)}" target="_blank" rel="noopener" title="${escapeHtml(tip)}">${inner}</a>`
@@ -592,6 +607,9 @@ function toggleSettings(open) {
 function on(sel, evt, fn) { document.querySelectorAll(sel).forEach(el => el.addEventListener(evt, fn)); }
 
 on('#settings-toggle', 'click', () => toggleSettings());
+if ($('#lunch-start')) { $('#lunch-start').value = hhmm(LUNCH.start); $('#lunch-end').value = hhmm(LUNCH.end); }
+on('#lunch-start', 'change', setLunchFromInputs);
+on('#lunch-end', 'change', setLunchFromInputs);
 on('[data-open-settings]', 'click', () => toggleSettings(true));
 on('.seg button', 'click', (e) => { view = e.currentTarget.dataset.view; localStorage.setItem('scheduler.view', view); render(); });
 on('#cal-prev', 'click', () => { weekStart = new Date(weekStart.getTime() - 7 * DAY); render(); });
@@ -625,8 +643,6 @@ on('#sched-file', 'change', async (e) => {
   const f = e.target.files[0];
   if (f) { loadSchedule(await f.text()); setStatus('#status', `Loaded ${schedule.length} schedule events from file.`); }
 });
-on('#show-past', 'change', render);
-on('#course-filter', 'change', render);
 on('#refresh', 'click', () => {
   const p = localStorage.getItem(KEYS.pass);
   showMeta();
@@ -634,7 +650,7 @@ on('#refresh', 'click', () => {
 });
 on('#forget', 'click', () => {
   Object.values(KEYS).forEach(k => localStorage.removeItem(k));
-  assignments = []; schedule = []; blockMap = {};
+  assignments = []; schedule = []; blockMap = {}; nicknames = {};
   updateEmptyState();
   $('#mapping').hidden = true;
   $('#passphrase').value = '';

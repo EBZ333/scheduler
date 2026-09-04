@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Scheduler</title>
-<link rel="stylesheet" href="style.css?v=10">
+<link rel="stylesheet" href="style.css?v=11">
 </head>
 <body>
 
@@ -15,9 +15,7 @@
     <button type="button" data-view="list">List</button>
   </nav>
   <div class="controls">
-    <select id="course-filter" aria-label="Course"><option value="">All courses</option></select>
-    <label class="check"><input type="checkbox" id="show-past"> Past</label>
-    <button id="refresh" type="button" class="text" title="Re-fetch data">Refresh</button>
+    <button id="refresh" type="button" title="Re-fetch data">refresh</button>
     <button id="settings-toggle" type="button" class="text" aria-expanded="false">Settings</button>
   </div>
 </header>
@@ -41,9 +39,19 @@
       <p><button id="forget" type="button" class="text danger">Forget passphrase and cached data</button></p>
     </section>
 
+    <section>
+      <h2>Lunch</h2>
+      <p class="hint">Blocked out of free time on every school day.</p>
+      <div class="row lunch-row">
+        <label>from <input id="lunch-start" type="time" step="300"></label>
+        <label>to <input id="lunch-end" type="time" step="300"></label>
+      </div>
+    </section>
+
     <section id="mapping" hidden>
       <h2>Classes</h2>
-      <p class="hint">Schedule class → Canvas course. Guessed from names; fix any that are wrong. Leave meetings unmatched.</p>
+      <p class="hint">Each schedule class, the Canvas course it matches, and an optional nickname used everywhere instead of the full name.</p>
+      <div class="map-row map-head"><span>class</span><span>canvas course</span><span>nickname</span></div>
       <div id="mapping-rows"></div>
     </section>
   </div>
@@ -90,7 +98,7 @@
   <p>Open <button type="button" class="text inline" data-open-settings>Settings</button> and enter your passphrase.</p>
 </div>
 
-<script src="ics.js?v=10"></script>
-<script src="app.js?v=10"></script>
+<script src="ics.js?v=11"></script>
+<script src="app.js?v=11"></script>
 </body>
 </html>
