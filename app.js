@@ -3,7 +3,7 @@ const KEYS = {
   pass: 'scheduler.passphrase',
   feedCache: 'scheduler.feedCache', schedCache: 'scheduler.schedCache',
   mapping: 'scheduler.blockMap', nicknames: 'scheduler.nicknames', lunch: 'scheduler.lunch',
-  custom: 'scheduler.custom', bg: 'scheduler.bg',
+  custom: 'scheduler.custom', bg: 'scheduler.bg', clockSeconds: 'scheduler.clockSeconds',
 };
 const DAY = 86400000;
 
@@ -711,12 +711,14 @@ on('#quick', 'submit', (e) => {
 });
 document.addEventListener('click', (e) => { const b = e.target.closest('[data-del]'); if (b) { e.preventDefault(); removeCustom(b.dataset.del); } });
 if (window.BG) {
-  const bg = localStorage.getItem(KEYS.bg) || 'none';
+  const bg = (localStorage.getItem(KEYS.bg) || 'none').replace('hair', 'grass');
   BG.set(bg);
   if ($('#bg-style')) $('#bg-style').value = bg;
   on('#bg-style', 'change', (e) => { localStorage.setItem(KEYS.bg, e.target.value); BG.set(e.target.value); });
 }
 if ($('#lunch-start')) { $('#lunch-start').value = hhmm(LUNCH.start); $('#lunch-end').value = hhmm(LUNCH.end); }
+if ($('#clock-seconds')) $('#clock-seconds').checked = localStorage.getItem(KEYS.clockSeconds) === '1';
+on('#clock-seconds', 'change', (e) => { localStorage.setItem(KEYS.clockSeconds, e.target.checked ? '1' : '0'); tickClock(); });
 on('#lunch-start', 'change', setLunchFromInputs);
 on('#lunch-end', 'change', setLunchFromInputs);
 on('[data-open-settings]', 'click', () => toggleSettings(true));
@@ -732,7 +734,8 @@ on('#plan-date', 'click', () => { planDay = defaultDay(); planDayTouched = false
 function tickClock() {
   const now = new Date();
   const t = $('#clock .t'), d = $('#clock .d');
-  if (t) t.textContent = now.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }).toLowerCase();
+  const secs = localStorage.getItem(KEYS.clockSeconds) === '1';
+  if (t) t.textContent = now.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', ...(secs ? { second: '2-digit' } : {}) }).toLowerCase();
   if (d) d.textContent = now.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }).toLowerCase();
 }
 tickClock(); setInterval(tickClock, 1000);

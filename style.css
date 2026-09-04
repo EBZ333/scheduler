@@ -57,7 +57,6 @@ input[type=checkbox] { accent-color: var(--ink); }
   background: var(--bg); border-bottom: 2px solid var(--line);
 }
 .corner { position: fixed; right: 1.25rem; bottom: 1rem; z-index: 5; text-align: right; pointer-events: none; line-height: 1; }
-.corner .brand { font-size: 0.7rem; color: var(--ink-3); letter-spacing: 0.02em; margin-bottom: 0.3rem; }
 .clock { font-variant-numeric: tabular-nums; white-space: nowrap; display: flex; flex-direction: column; align-items: flex-end; gap: 0.15rem; }
 .clock .t { font-size: 2.4rem; letter-spacing: -0.04em; }
 .clock .d { font-size: 0.6rem; color: var(--ink-3); }
@@ -71,8 +70,8 @@ input[type=checkbox] { accent-color: var(--ink); }
 #refresh { padding: 0.4rem 0.9rem; font-size: 0.85rem; }
 
 /* ---------- quick add ---------- */
-.quick { position: fixed; left: 1.25rem; bottom: 1rem; z-index: 5; width: min(420px, 50vw); }
-.quick input { width: 100%; background: var(--bg); border: 0; border-bottom: 2px solid var(--ink); padding: 0.4rem 0; outline: none; font-size: 1.2rem; letter-spacing: -0.02em; }
+.quick { position: fixed; left: 1.25rem; bottom: 1rem; z-index: 5; width: min(300px, 40vw); }
+.quick input { width: 100%; background: var(--bg); border: 0; border-bottom: 2px solid var(--ink); padding: 0.3rem 0; outline: none; font-size: 0.95rem; letter-spacing: -0.01em; }
 .quick input:focus { border-bottom-width: 3px; }
 .quick input::placeholder { color: var(--ink-3); font-weight: 700; }
 .quick input::placeholder { color: var(--ink-3); font-weight: 500; }
