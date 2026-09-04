@@ -2,9 +2,9 @@
 :root {
   --bg: #ffffff; --ink: #000000; --ink-2: #555555; --ink-3: #9a9a9a;
   --line: #000000; --hair: #e0e0e0; --fill: #f2f2f2; --fill-2: #e8e8e8;
-  --accent: #ff4a00; --accent-ink: #ffffff;
-  --free: #000000;
-  --late: #ff4a00; --soon: #ff4a00;
+  --accent: #ffb000; --accent-ink: #000000;
+  --free: #000000; --hatch: #cfcfcf;
+  --late: #e09600; --soon: #e09600;
   --muted: var(--ink-3); --text: var(--ink); --card: var(--bg);
   --bar-h: 56px;
 }
@@ -12,7 +12,7 @@
   :root {
     --bg: #0a0a0a; --ink: #ffffff; --ink-2: #b0b0b0; --ink-3: #6e6e6e;
     --line: #ffffff; --hair: #262626; --fill: #161616; --fill-2: #222222;
-    --accent: #ff5a14; --free: #ffffff;
+    --hatch: #3a3a3a; --accent: #ffb62e; --free: #ffffff; --late: #ffb62e; --soon: #ffb62e;
   }
 }
 
@@ -23,9 +23,10 @@ body {
   font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; font-weight: 700; font-size: 14px; line-height: 1.35;
   -webkit-font-smoothing: antialiased;
 }
+h1, h2, h3, button, .brand, .seg, .subbar, .cal-head, .tl-row .what, .chip, .tag, .day h3, .cal-free, .cal-ev .t, .count, .hint, .status, .empty-state, summary, .map-row span, label.check { text-transform: lowercase; }
 h1, h2, h3 { margin: 0; font-weight: 700; letter-spacing: -0.02em; }
 h1 { font-size: 1.5rem; }
-h2 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-3); margin-bottom: 0.75rem; }
+h2 { font-size: 0.8rem; letter-spacing: 0; color: var(--ink-3); margin-bottom: 0.75rem; }
 p { margin: 0 0 0.75rem; }
 a { color: inherit; }
 code { font-family: ui-monospace, Menlo, monospace; font-weight: 500; font-size: 0.85em; background: var(--fill); padding: 0.05em 0.35em; }
@@ -38,7 +39,7 @@ button.text.inline { padding: 0; text-decoration: underline; }
 input[type=password], input[type=url], select {
   background: var(--bg); border: 0; border-bottom: 2px solid var(--ink); padding: 0.45rem 0; border-radius: 0; outline: none;
 }
-select { padding-right: 1.2rem; -webkit-appearance: none; appearance: none;
+select { text-transform: lowercase; padding-right: 1.2rem; -webkit-appearance: none; appearance: none;
   background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
   background-position: calc(100% - 10px) 50%, calc(100% - 5px) 50%; background-size: 5px 5px; background-repeat: no-repeat; }
 input[type=checkbox] { accent-color: var(--ink); }
@@ -55,7 +56,8 @@ input[type=checkbox] { accent-color: var(--ink); }
   display: flex; align-items: center; gap: 1.5rem; padding: 0 1.25rem;
   background: var(--bg); border-bottom: 2px solid var(--line);
 }
-.brand { font-size: 1.1rem; text-transform: uppercase; letter-spacing: 0.12em; }
+.brand { font-size: 1.1rem; letter-spacing: -0.02em; }
+.clock { font-size: 0.85rem; color: var(--ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .seg { display: flex; gap: 1.25rem; height: 100%; }
 .seg button { background: transparent; color: var(--ink-3); padding: 0; height: 100%; border-bottom: 3px solid transparent; margin-bottom: -2px; font-size: 0.95rem; }
 .seg button.active { color: var(--ink); border-bottom-color: var(--ink); }
@@ -79,7 +81,7 @@ summary { cursor: pointer; font-weight: 700; }
 /* ---------- main / sub bar ---------- */
 main { max-width: 1400px; margin: 0 auto; padding: 1.25rem 1.25rem 4rem; }
 .subbar { display: flex; align-items: baseline; gap: 1rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
-.subbar h1 { font-size: clamp(1.4rem, 3vw, 2.2rem); }
+.subbar h1 { font-size: clamp(1.4rem, 3vw, 2.2rem); cursor: pointer; }
 .nav { display: flex; gap: 2px; }
 .nav button { padding: 0.35rem 0.7rem; font-size: 0.9rem; }
 .count { color: var(--ink-3); font-size: 0.9rem; }
@@ -89,7 +91,7 @@ main { max-width: 1400px; margin: 0 auto; padding: 1.25rem 1.25rem 4rem; }
 
 /* ---------- list view ---------- */
 .day { margin-top: 1.5rem; }
-.day h3 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-3); margin-bottom: 0.4rem; }
+.day h3 { font-size: 0.85rem; color: var(--ink-3); margin-bottom: 0.4rem; }
 .day h3.today { color: var(--accent); }
 .blocks { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.4rem; }
 .chip { font-size: 0.75rem; padding: 0.1rem 0.5rem; border: 1px solid var(--hair); color: var(--ink-2); }
@@ -108,12 +110,12 @@ main { max-width: 1400px; margin: 0 auto; padding: 1.25rem 1.25rem 4rem; }
 /* ---------- calendar ---------- */
 .cal-grid { display: grid; grid-template-columns: 48px repeat(var(--days), 1fr); border-top: 2px solid var(--line); font-size: 0.78rem; }
 .cal-corner { border-bottom: 1px solid var(--hair); }
-.cal-head { padding: 0.5rem 0.3rem; text-align: left; border-bottom: 1px solid var(--hair); border-left: 1px solid var(--hair); text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.7rem; }
-.cal-head small { display: block; color: var(--ink-3); font-size: 0.7rem; letter-spacing: 0; text-transform: none; }
+.cal-head { padding: 0.5rem 0.3rem; text-align: left; border-bottom: 1px solid var(--hair); border-left: 1px solid var(--hair); font-size: 0.8rem; }
+.cal-head small { display: block; color: var(--ink-3); font-size: 0.7rem; }
 .cal-head.today { color: var(--accent); }
 .cal-allday { min-height: 1.2rem; padding: 0.15rem; border-left: 1px solid var(--hair); border-bottom: 1px solid var(--hair); display: flex; flex-direction: column; gap: 2px; }
 .cal-times { position: relative; }
-.cal-times div { position: absolute; right: 6px; transform: translateY(-50%); color: var(--ink-3); font-size: 0.65rem; }
+.cal-times div { position: absolute; right: 6px; transform: translateY(-50%); color: var(--ink-3); font-size: 0.65rem; text-transform: lowercase; }
 .cal-col { position: relative; border-left: 1px solid var(--hair);
   background: repeating-linear-gradient(to bottom, transparent 0, transparent calc(var(--hour) - 1px), var(--hair) calc(var(--hour) - 1px), var(--hair) var(--hour)); }
 .cal-col.today { background-color: var(--fill); }
@@ -121,17 +123,20 @@ main { max-width: 1400px; margin: 0 auto; padding: 1.25rem 1.25rem 4rem; }
 .cal-ev.klass { background: var(--fill-2); border-left: 3px solid var(--ink); color: var(--ink); }
 .cal-ev.klass.unmapped { background: transparent; border-left: 3px solid var(--ink-3); color: var(--ink-3); }
 .cal-ev .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cal-ev .tm { color: var(--ink-3); font-size: 0.65rem; font-weight: 500; }
+.cal-ev .tm { color: var(--ink-3); font-size: 0.65rem; font-weight: 500; text-transform: lowercase; }
+.item .time, .work .due, .due-list .c, .cal-due { text-transform: lowercase; }
 .cal-due { display: block; margin-top: 3px; padding: 1px 5px; background: var(--accent); color: var(--accent-ink); font-size: 0.7rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-decoration: none; }
 .cal-due.past { opacity: 0.4; }
 .cal-due.loose { position: absolute; left: 2px; right: 2px; margin: 0; z-index: 2; }
-.cal-free { position: absolute; left: 2px; right: 2px; border: 1px dashed var(--ink-3); color: var(--ink-2); font-size: 0.65rem; padding: 2px 6px; text-transform: uppercase; letter-spacing: 0.06em; }
+.cal-free { position: absolute; left: 2px; right: 2px; border: 1px solid var(--ink-3); color: var(--ink); font-size: 0.7rem; padding: 2px 6px;
+  background: repeating-linear-gradient(-45deg, transparent 0 5px, var(--hatch) 5px 7px); }
+.cal-free span { background: var(--bg); padding: 0 3px; }
 .cal-now { position: absolute; left: 0; right: 0; height: 2px; background: var(--accent); z-index: 3; }
 
 /* ---------- free-time plan ---------- */
 .tl { border-left: 2px solid var(--line); margin-left: 5.2rem; }
 .tl-row { position: relative; padding: 0.8rem 0 0.8rem 1.1rem; border-bottom: 1px solid var(--hair); }
-.tl-row .when { position: absolute; left: -5.3rem; width: 4.6rem; text-align: right; font-size: 0.75rem; color: var(--ink-3); line-height: 1.3; font-weight: 500; }
+.tl-row .when { position: absolute; left: -5.3rem; width: 4.6rem; text-align: right; font-size: 0.75rem; color: var(--ink-3); line-height: 1.3; font-weight: 500; text-transform: lowercase; }
 .tl-row .when b { display: block; color: var(--ink); font-weight: 700; font-size: 0.85rem; }
 .tl-row::before { content: ''; position: absolute; left: -6px; top: 1rem; width: 10px; height: 10px; background: var(--bg); border: 2px solid var(--ink-3); }
 .tl-row.klass::before { background: var(--ink); border-color: var(--ink); }
@@ -140,9 +145,10 @@ main { max-width: 1400px; margin: 0 auto; padding: 1.25rem 1.25rem 4rem; }
 .tl-row.past { opacity: 0.4; }
 .tl-row.now { background: var(--fill); }
 .tl-row .what { display: inline; font-size: 1.05rem; }
-.tl-row .what small { color: var(--ink-3); font-weight: 500; margin-left: 0.4rem; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; }
-.tl-row.free .what { text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.95rem; }
-.tl-row.free { background: repeating-linear-gradient(-45deg, transparent 0 6px, var(--fill) 6px 7px); }
+.tl-row .what small { color: var(--ink-3); font-weight: 500; margin-left: 0.4rem; font-size: 0.75rem; }
+.tl-row.free .what { font-size: 1.05rem; }
+.tl-row.free { background: repeating-linear-gradient(-45deg, transparent 0 7px, var(--hatch) 7px 9px); }
+.tl-row.free > details > summary > *, .tl-row.free > .what { background: var(--bg); padding: 0 4px; margin-left: -4px; }
 .tl-row .sum { color: var(--ink-2); font-size: 0.85rem; font-weight: 500; }
 .tl-row.before.warn .what, .tl-row.before .sum { color: var(--accent); }
 .tl-row.before:not(.warn) .sum { color: var(--ink-3); }

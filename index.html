@@ -4,12 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Scheduler</title>
-<link rel="stylesheet" href="style.css?v=8">
+<link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
 
 <header class="bar">
-  <div class="brand">Scheduler</div>
+  <div class="brand">scheduler</div>
+  <div id="clock" class="clock"></div>
   <nav class="seg" aria-label="View">
     <button type="button" data-view="plan" class="active">Free time</button>
     <button type="button" data-view="calendar">Calendar</button>
@@ -55,10 +56,9 @@
     <div class="subbar">
       <div class="nav">
         <button type="button" id="plan-prev" aria-label="Previous day">‹</button>
-        <button type="button" id="plan-today">Today</button>
         <button type="button" id="plan-next" aria-label="Next day">›</button>
       </div>
-      <h1 id="plan-date"></h1>
+      <h1 id="plan-date" title="Back to today"></h1>
       <span id="count" class="count"></span>
     </div>
     <div id="plan-body"></div>
@@ -68,10 +68,9 @@
     <div class="subbar">
       <div class="nav">
         <button type="button" id="cal-prev" aria-label="Previous week">‹</button>
-        <button type="button" id="cal-today">Today</button>
         <button type="button" id="cal-next" aria-label="Next week">›</button>
       </div>
-      <h1 id="cal-range"></h1>
+      <h1 id="cal-range" title="Back to this week"></h1>
       <span id="cal-count" class="count"></span>
     </div>
     <div id="cal-grid" class="cal-grid"></div>
@@ -84,11 +83,11 @@
 </main>
 
 <div id="empty-state" class="empty-state" hidden>
-  <h1>Nothing loaded.</h1>
+  <h1>nothing loaded.</h1>
   <p>Open <button type="button" class="text inline" data-open-settings>Settings</button> and enter your passphrase.</p>
 </div>
 
-<script src="ics.js?v=8"></script>
-<script src="app.js?v=8"></script>
+<script src="ics.js?v=9"></script>
+<script src="app.js?v=9"></script>
 </body>
 </html>

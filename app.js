@@ -146,6 +146,7 @@ function loadSchedule(text) {
     };
   }).sort((a, b) => a.start - b.start);
   computeSchoolHours();
+  if (!planDayTouched) planDay = defaultDay();
   saveJSON(KEYS.schedCache, { text, at: Date.now() });
   renderMapping();
   render();
@@ -215,6 +216,20 @@ function effectiveDue(a) {
 let view = localStorage.getItem('scheduler.view') || 'plan';
 let weekStart = startOfWeek(new Date());
 let planDay = new Date(dayKey(new Date()));
+let planDayTouched = false;
+
+// After the school day ends, "today" is done: default to the next school day.
+function afterSchool(now = new Date()) { return now.getHours() * 60 + now.getMinutes() >= schoolHours.end; }
+function isSchoolDay(k) { return schedule.some(s => dayKey(s.start) === k && !s.allDay); }
+function defaultDay() {
+  const now = new Date();
+  let k = dayKey(now);
+  if (!afterSchool(now)) return new Date(k);
+  for (let i = 1; i <= 14; i++) { const n = k + i * DAY; if (!schedule.length || isSchoolDay(n)) return new Date(n); }
+  return new Date(k + DAY);
+}
+// The day list/plan treat as "current": today, or tomorrow once school is over.
+function cutoffKey() { const now = new Date(); return dayKey(now) + (afterSchool(now) ? DAY : 0); }
 
 function startOfWeek(d) {
   const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -225,8 +240,8 @@ function startOfWeek(d) {
 function fmtDay(d) {
   const diff = Math.round((dayKey(d) - dayKey(new Date())) / DAY);
   const label = d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
-  if (diff === 0) return 'Today · ' + label;
-  if (diff === 1) return 'Tomorrow · ' + label;
+  if (diff === 0) return 'today · ' + label;
+  if (diff === 1) return 'tomorrow · ' + label;
   return label;
 }
 function fmtClock(d) { return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); }
@@ -268,9 +283,10 @@ function renderList() {
   const todayKey = dayKey(now);
   const list = $('#list');
 
+  const cutoff = cutoffKey();
   const items = assignments.filter(a =>
     (!course || a.course === course) &&
-    (showPast || dayKey(a.due) >= todayKey)
+    (showPast || dayKey(a.due) >= cutoff)
   );
   $('#list-count').textContent = `${items.length} items`;
 
@@ -281,7 +297,7 @@ function renderList() {
     groups.get(k).push(a);
   }
   // Always show today's schedule, even with nothing due.
-  if (schedule.length && !groups.has(todayKey) && !showPast) groups.set(todayKey, []);
+  if (schedule.length && !groups.has(cutoff) && !showPast) groups.set(cutoff, []);
   const keys = [...groups.keys()].sort((a, b) => a - b);
 
   if (!keys.length) {
@@ -521,7 +537,7 @@ function renderCalendar() {
   for (const { k } of days) {
     html += `<div class="cal-col ${k === todayKey ? 'today' : ''}" style="height:${(h1 - h0) * HOUR}px">`;
     const evs = dayEvents(k);
-    for (const f of freeSlots(evs)) html += `<div class="cal-free" style="top:${top(f.start)}px;height:${Math.max(14, top(f.end) - top(f.start) - 2)}px">free ${fmtMinutes(f.minutes)}</div>`;
+    for (const f of freeSlots(evs)) html += `<div class="cal-free" style="top:${top(f.start)}px;height:${Math.max(14, top(f.end) - top(f.start) - 2)}px"><span>free ${fmtMinutes(f.minutes)}</span></div>`;
     for (const l of evs.filter(e => e.lunch)) html += `<div class="cal-ev klass unmapped" style="top:${top(l.start)}px;height:${Math.max(18, top(l.end) - top(l.start) - 2)}px"><div class="t">Lunch</div></div>`;
     for (const s of sched.filter(s => !s.allDay && dayKey(s.start) === k)) {
       const end = s.end || new Date(s.start.getTime() + 45 * 60000);
@@ -580,10 +596,21 @@ on('[data-open-settings]', 'click', () => toggleSettings(true));
 on('.seg button', 'click', (e) => { view = e.currentTarget.dataset.view; localStorage.setItem('scheduler.view', view); render(); });
 on('#cal-prev', 'click', () => { weekStart = new Date(weekStart.getTime() - 7 * DAY); render(); });
 on('#cal-next', 'click', () => { weekStart = new Date(weekStart.getTime() + 7 * DAY); render(); });
-on('#cal-today', 'click', () => { weekStart = startOfWeek(new Date()); render(); });
-on('#plan-prev', 'click', () => { planDay = new Date(planDay.getTime() - DAY); render(); });
-on('#plan-next', 'click', () => { planDay = new Date(planDay.getTime() + DAY); render(); });
-on('#plan-today', 'click', () => { planDay = new Date(dayKey(new Date())); render(); });
+on('#cal-range', 'click', () => { weekStart = startOfWeek(new Date()); render(); });
+on('#plan-prev', 'click', () => { planDay = new Date(planDay.getTime() - DAY); planDayTouched = true; render(); });
+on('#plan-next', 'click', () => { planDay = new Date(planDay.getTime() + DAY); planDayTouched = true; render(); });
+on('#plan-date', 'click', () => { planDay = defaultDay(); planDayTouched = false; render(); });
+
+// Clock in the top bar.
+function tickClock() {
+  const now = new Date();
+  const el = $('#clock');
+  if (el) el.textContent = now.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }).toLowerCase() + ' · ' + now.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }).toLowerCase();
+}
+tickClock(); setInterval(tickClock, 1000);
+// When the school day ends, roll the plan over to the next day (if the user hasn't navigated).
+let wasAfter = afterSchool();
+setInterval(() => { const a = afterSchool(); if (a !== wasAfter) { wasAfter = a; if (!planDayTouched) planDay = defaultDay(); render(); } }, 30 * 1000);
 
 on('#unlock-form', 'submit', (e) => {
   e.preventDefault();
