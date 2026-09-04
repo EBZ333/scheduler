@@ -1290,7 +1290,7 @@ function runSimulation(config) {
     raf = requestAnimationFrame(update);
   }
 
-  return {
+  const api = {
     stop() {
       running = false; cancelAnimationFrame(raf);
       window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerdown", onDown);
@@ -1788,6 +1788,7 @@ function runSimulation(config) {
     }
     return hash;
   }
+  return api;
 }
 
   function start(canvasEl, config) {
