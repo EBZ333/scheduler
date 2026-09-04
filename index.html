@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Scheduler</title>
-<link rel="stylesheet" href="style.css?v=20">
+<link rel="stylesheet" href="style.css?v=21">
 </head>
 <body>
 
@@ -66,19 +66,6 @@
     <section id="mapping" hidden>
       <div class="map-row map-head"><span>class</span><span>canvas course</span><span>nickname</span><span>color</span></div>
       <div id="mapping-rows"></div>
-      <details class="sheets">
-        <summary>weeksheets</summary>
-        <p class="hint">Paste a teacher's weeksheet (the "Week N – date / Day C-N: … / HW: …" format). Class days get an "in class" note and each HW line becomes a task due at the start of the next class.</p>
-        <div class="sheet-row">
-          <select id="sheet-course"></select>
-          <select id="sheet-offset">
-            <option value="other">written for the other section (odd/even)</option>
-            <option value="mine">written for my section</option>
-          </select>
-        </div>
-        <textarea id="sheet-text" rows="6" placeholder="paste weeksheet text"></textarea>
-        <div class="sheet-row"><button id="sheet-save" type="button">save</button><span id="sheet-status" class="hint"></span></div>
-      </details>
     </section>
   </div>
 </aside>
@@ -144,8 +131,8 @@
   <p>Open <button type="button" class="text inline" data-open-settings>Settings</button> and enter your passphrase.</p>
 </div>
 
-<script src="bg.js?v=20"></script>
-<script src="ics.js?v=20"></script>
-<script src="app.js?v=20"></script>
+<script src="bg.js?v=21"></script>
+<script src="ics.js?v=21"></script>
+<script src="app.js?v=21"></script>
 </body>
 </html>

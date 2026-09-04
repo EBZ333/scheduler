@@ -4,7 +4,7 @@ const KEYS = {
   feedCache: 'scheduler.feedCache', schedCache: 'scheduler.schedCache',
   mapping: 'scheduler.blockMap', nicknames: 'scheduler.nicknames', lunch: 'scheduler.lunch',
   custom: 'scheduler.custom', bg: 'scheduler.bg', clockSeconds: 'scheduler.clockSeconds',
-  estimates: 'scheduler.estimates', colors: 'scheduler.colors', sheets: 'scheduler.sheets',
+  estimates: 'scheduler.estimates', colors: 'scheduler.colors',
 };
 const DAY = 86400000;
 
@@ -32,7 +32,7 @@ function customById(id) { return customEvents.find(e => e.id === id); }
 // Time estimates per assignment (minutes), keyed by Canvas uid. Default when unset.
 let estimates = loadJSON(KEYS.estimates) || {};
 const DEFAULT_EST = 30;
-function estimateOf(a) { return estimates[a.uid] ?? DEFAULT_EST; }
+function estimateOf(a) { return isExam(a) ? 0 : (estimates[a.uid] ?? DEFAULT_EST); }
 function hasEstimate(a) { return a.uid in estimates; }
 
 // Course colors keyed by schedule class.
@@ -40,14 +40,11 @@ let colors = loadJSON(KEYS.colors) || {};
 function colorFor(classKey) { return (classKey && colors[classKey]) || ''; }
 function colorForCourse(course) { return colorFor(blockForCourse(course)); }
 
-// Pasted weeksheets per Canvas course: { course: { text, offset } }. Tasks derived from them live in sheetTasks.
-let sheets = loadJSON(KEYS.sheets) || {};
-let sheetTasks = [];
-function allItems() { return assignments.concat(sheetTasks); }
+function allItems() { return assignments; }
 
 // Tests, quizzes and exams get flagged.
 const EXAM_RE = /\b(quiz|quizzes|test|exam|midterm|final|lockdown|assessment)\b/i;
-function isExam(a) { return !a.sheet && EXAM_RE.test(a.title); }
+function isExam(a) { return EXAM_RE.test(a.title); }
 
 function loadJSON(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (_) { return null; } }
 function saveJSON(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} }
@@ -123,8 +120,6 @@ function loadAssignments(text) {
   saveJSON(KEYS.feedCache, { text, at: Date.now() });
   populateCourses();
   renderMapping();
-  buildSheetTasks();
-  renderSheetSettings();
   render();
   updateEmptyState();
 }
@@ -182,7 +177,6 @@ function loadSchedule(text) {
     };
   }).sort((a, b) => a.start - b.start);
   computeSchoolHours();
-  buildSheetTasks();
   if (!planDayTouched) planDay = defaultDay();
   saveJSON(KEYS.schedCache, { text, at: Date.now() });
   renderMapping();
@@ -240,7 +234,6 @@ function renderMapping() {
       const b = sel.dataset.block;
       blockMap[b] = sel.value;
       saveJSON(KEYS.mapping, blockMap);
-      buildSheetTasks();
       render();
     });
   });
@@ -375,7 +368,7 @@ function renderList() {
       const block = blockForCourse(a.course);
       if (block) {
         if (eff.meeting) {
-          meta = `<span class="tag">due at start of class</span>`;
+          meta = `<span class="tag">${isExam(a) ? 'test in class' : 'due at start of class'}</span>`;
         } else {
           const prev = [...schedule].reverse().find(s => s.block === block && s.start < a.due);
           if (prev) meta = `<span class="tag muted">no class that day · last class ${escapeHtml(prev.start.toLocaleDateString(undefined, { weekday: 'short' }))}</span>`;
@@ -495,103 +488,6 @@ function saveEdit() {
   saveCustom(); closeEdit(); render();
 }
 
-/* ---------- Weeksheets ---------- */
-// A teacher's pasted weeksheet: "Week N – M/D" headers, then "Day C-N: what we did" lines each followed by "HW: ...".
-// Entries are written for one section; if it's the other section of the rotation the content lands on my next class.
-
-function parseSheet(text) {
-  const now = new Date();
-  const startYear = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;   // school year starts in the summer
-  const weeks = [];
-  let week = null, entry = null;
-  for (const raw of text.split(/\r?\n/)) {
-    const line = raw.trim();
-    if (!line) continue;
-    let m;
-    if ((m = line.match(/^week\s*(\d+)\s*[–—-]+\s*(\d{1,2})\/(\d{1,2})/i))) {
-      const mo = +m[2], d = +m[3];
-      week = { n: +m[1], monday: new Date(mo >= 7 ? startYear : startYear + 1, mo - 1, d), entries: [] };
-      weeks.push(week); entry = null; continue;
-    }
-    if (!week) continue;
-    if ((m = line.match(/^day\s*(\d+)\s*-\s*(\d+)\s*:\s*(.*)$/i))) {
-      entry = { cycle: +m[1], day: +m[2], label: `Day ${m[1]}-${m[2]}`, inClass: m[3].trim(), hw: '' };
-      week.entries.push(entry); continue;
-    }
-    if ((m = line.match(/^hw\s*:\s*(.*)$/i))) { if (entry) entry.hw = (entry.hw ? entry.hw + ' ' : '') + m[1].trim(); continue; }
-    if (/^(unit\s*\d+\s*videos?|videos?)\b/i.test(line)) { week = null; entry = null; continue; }   // reference material follows
-    if (entry && !/^(monday|tuesday|wednesday|thursday|friday)\s*:/i.test(line)) entry.inClass += ' ' + line;
-  }
-  return weeks;
-}
-
-// Map sheet entries onto my class meetings. Returns Map(dayKey of my meeting -> entry).
-function mapSheet(course, weeks, offset) {
-  const block = blockForCourse(course);
-  if (!block) return new Map();
-  const mine = schedule.filter(s => s.block === block && !s.allDay).map(s => dayKey(s.start));
-  const mineSet = new Set(mine);
-  const schoolDays = [...new Set(schedule.filter(s => !s.allDay && s.sched !== null).map(s => dayKey(s.start)))].sort((x, y) => x - y);
-  const out = new Map();
-  for (const w of weeks) {
-    const wk = dayKey(w.monday), wkEnd = wk + 7 * DAY;
-    let targets;
-    if (offset === 'mine') targets = mine.filter(k => k >= wk && k < wkEnd);
-    else {
-      // the other section meets on the school days I don't; its content reaches me at my next meeting after that day
-      const others = schoolDays.filter(k => k >= wk && k < wkEnd && !mineSet.has(k));
-      targets = others.map(o => mine.find(k => k > o)).filter(Boolean);
-    }
-    w.entries.forEach((e, i) => { if (targets[i] !== undefined) out.set(targets[i], e); });
-  }
-  return out;
-}
-
-let sheetIndex = {};   // course -> Map(dayKey -> entry)
-function buildSheetTasks() {
-  sheetIndex = {}; sheetTasks = [];
-  for (const [course, sh] of Object.entries(sheets)) {
-    if (!sh || !sh.text) continue;
-    const map = mapSheet(course, parseSheet(sh.text), sh.offset || 'other');
-    sheetIndex[course] = map;
-    const block = blockForCourse(course);
-    const meetings = schedule.filter(s => s.block === block && !s.allDay).sort((x, y) => x.start - y.start);
-    for (const [k, e] of map) {
-      if (!e.hw || /^(none|no hw|nothing)\b/i.test(e.hw)) continue;
-      const next = meetings.find(s => dayKey(s.start) > k);
-      if (!next) continue;
-      sheetTasks.push({ uid: `sheet:${course}:${k}`, title: `HW: ${e.hw}`, course, due: next.start, allDay: false, url: '', description: e.inClass, isAssignment: true, sheet: true });
-    }
-  }
-}
-function sheetFor(block, k) {
-  for (const [course, map] of Object.entries(sheetIndex)) if (blockForCourse(course) === block && map.has(k)) return map.get(k);
-  return null;
-}
-function renderSheetSettings() {
-  const sel = $('#sheet-course'); if (!sel) return;
-  const cs = courses();
-  const cur = sel.value;
-  sel.innerHTML = cs.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
-  if (cs.includes(cur)) sel.value = cur;
-  loadSheetIntoForm();
-}
-function loadSheetIntoForm() {
-  const c = $('#sheet-course')?.value; if (!c) return;
-  const sh = sheets[c] || {};
-  $('#sheet-text').value = sh.text || '';
-  $('#sheet-offset').value = sh.offset || 'other';
-  const n = sheetIndex[c] ? sheetIndex[c].size : 0;
-  $('#sheet-status').textContent = sh.text ? `${n} class days matched` : '';
-}
-function saveSheetFromForm() {
-  const c = $('#sheet-course')?.value; if (!c) return;
-  const text = $('#sheet-text').value.trim();
-  if (text) sheets[c] = { text, offset: $('#sheet-offset').value }; else delete sheets[c];
-  saveJSON(KEYS.sheets, sheets);
-  buildSheetTasks(); loadSheetIntoForm(); render();
-}
-
 /* ---------- Free time ---------- */
 
 const BUFFER_MIN = 5;
@@ -675,6 +571,7 @@ function dueOn(k) {
 
 // Small inline minutes field for an assignment's time estimate.
 function estInput(a) {
+  if (isExam(a)) return '';
   return `<label class="est ${hasEstimate(a) ? '' : 'guess'}" title="time estimate"><input type="text" inputmode="numeric" data-est="${escapeHtml(a.uid)}" value="${estimateOf(a)}">m</label>`;
 }
 
@@ -715,18 +612,11 @@ function countSummary(list) {
   return [...c.entries()].sort((x, y) => y[1] - x[1]).map(([s, n]) => `${n} ${s}`).join(', ');
 }
 
-function examStripHtml(fromKey) {
-  const now = new Date();
-  const soon = allItems().filter(x => isExam(x) && dayKey(x.due) >= fromKey && dayKey(x.due) < fromKey + 8 * DAY)
-    .map(x => ({ a: x, eff: effectiveDue(x) })).sort((p, q) => p.eff.due - q.eff.due);
-  if (!soon.length) return '';
-  return `<div class="exams">${soon.map(x => `<span class="exam-chip" style="${colorStyle(colorForCourse(x.a.course))}"><b>${escapeHtml(x.a.title)}</b> ${escapeHtml(displayCourse(x.a.course))} · ${escapeHtml(x.eff.due.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }).toLowerCase())} ${fmtClock(x.eff.due)}</span>`).join('')}</div>`;
-}
 function colorStyle(c) { return c ? `--c:${c}` : ''; }
 
 function workLi(x, extra = '') {
   const { a, eff } = x;
-  return `<li class="${isExam(a) ? 'exam' : ''}">${dueLink(x)}${estInput(a)}<span class="due">${extra}${a.allDay && !eff.moved ? 'all day' : 'due ' + fmtClock(eff.due)}${eff.moved ? ` <span class="moved">${escapeHtml(fmtTime(a))}</span>` : ''}</span></li>`;
+  return `<li class="${isExam(a) ? 'exam' : ''}">${dueLink(x)}${estInput(a)}<span class="due">${extra}${a.allDay && !eff.moved ? 'all day' : (isExam(a) ? '' : 'due ') + fmtClock(eff.due)}${eff.moved ? ` <span class="moved">${escapeHtml(fmtTime(a))}</span>` : ''}</span></li>`;
 }
 
 function renderPlan() {
@@ -741,15 +631,16 @@ function renderPlan() {
 
   const body = $('#plan-body');
   if (!evs.some(e => e.sched)) {
-    body.innerHTML = examStripHtml(k) + `<p class="empty">no school this day.</p>` +
+    body.innerHTML = `<p class="empty">no school this day.</p>` +
       (evs.length ? `<div class="tl">${evs.map(r => customRowHtml(r, k, now)).join('')}</div>` : '') +
       (dues.length ? dueListHtml(dues, now) : '');
     return;
   }
   const totalFree = slots.reduce((n, s) => n + s.minutes, 0);
   const firstFree = slots[0] ? slots[0].start : null;
-  const beforeSchool = dues.filter(x => !firstFree || x.eff.due <= firstFree);
-  const inSchool = dues.filter(x => firstFree && x.eff.due > firstFree);
+  const work = dues.filter(x => !isExam(x.a));                 // tests happen in class; they're not work to schedule
+  const beforeSchool = work.filter(x => !firstFree || x.eff.due <= firstFree);
+  const inSchool = work.filter(x => firstFree && x.eff.due > firstFree);
   const plan = autoPlan(slots, inSchool);
   const workMin = inSchool.reduce((n, x) => n + estimateOf(x.a), 0);
   const overflowMin = plan.overflow.reduce((n, o) => n + o.minutes, 0);
@@ -759,8 +650,7 @@ function renderPlan() {
     : `<div class="what">${summaryHtml}</div>`;
   const ul = (items) => items.length ? `<ul class="work">${items.join('')}</ul>` : '';
 
-  let html = examStripHtml(k);
-  html += `<p class="hint">${fmtMinutes(totalFree)} free · ${dues.length} due · ${fmtMinutes(workMin)} of work${inSchool.length ? (overflowMin ? ` · <span class="warn">${fmtMinutes(overflowMin)} doesn't fit</span>` : ' · fits') : ''}</p><div class="tl">`;
+  let html = `<p class="hint">${fmtMinutes(totalFree)} free · ${dues.length} due · ${fmtMinutes(workMin)} of work${inSchool.length ? (overflowMin ? ` · <span class="warn">${fmtMinutes(overflowMin)} doesn't fit</span>` : ' · fits') : ''}</p><div class="tl">`;
   html += `<div class="tl-row before ${beforeSchool.length ? 'warn' : ''} ${k === todayKey && evs[0].start <= now ? 'past' : ''}">
     <div class="when"><b>before</b>${fmtClock(evs[0].start)}</div>
     ${detail(`<span class="what">Before school</span><small class="sum">${beforeSchool.length ? countSummary(beforeSchool) : 'nothing due at first period'}</small>`, ul(beforeSchool.map(x => workLi(x))))}
@@ -774,11 +664,10 @@ function renderPlan() {
     let listHtml = '', sum = '', style = '', note = '';
     if (r.kind === 'klass') {
       const list = dues.filter(x => x.eff.meeting === r.sched);
-      sum = list.length ? `${list.length} due at start` : '';
-      listHtml = ul(list.map(x => workLi(x)));
+      const tests = list.filter(x => isExam(x.a)), hw = list.filter(x => !isExam(x.a));
+      sum = [tests.length ? `${tests.length === 1 ? 'test' : tests.length + ' tests'} in class` : '', hw.length ? `${hw.length} due at start` : ''].filter(Boolean).join(' · ');
+      listHtml = ul([...tests.map(x => workLi(x, 'in class · ')), ...hw.map(x => workLi(x))]);
       style = colorStyle(colorFor(r.block));
-      const sh = sheetFor(r.block, k);
-      if (sh && sh.inClass) note = `<small class="sheet">in class: ${escapeHtml(sh.inClass)}</small>`;
     }
     if (r.kind === 'free') {
       const alloc = plan.bySlot.get(r.i) || [];
@@ -881,8 +770,7 @@ function renderCalendar() {
       const end = s.end || new Date(s.start.getTime() + 45 * 60000);
       const mapped = s.block && blockMap[s.block];
       const dues = items.filter(x => x.eff.meeting === s);
-      const sh = sheetFor(s.block, k);
-      html += `<div class="cal-ev klass ${mapped ? '' : 'unmapped'}" style="top:${top(s.start)}px;height:${Math.max(22, top(end) - top(s.start) - 2)}px;${colorStyle(colorFor(s.block))}" title="${escapeHtml(s.title + (sh && sh.inClass ? ' — in class: ' + sh.inClass : ''))}">
+      html += `<div class="cal-ev klass ${mapped ? '' : 'unmapped'}" style="top:${top(s.start)}px;height:${Math.max(22, top(end) - top(s.start) - 2)}px;${colorStyle(colorFor(s.block))}" title="${escapeHtml(s.title)}">
         <div class="t">${escapeHtml(classLabel(s.title))}</div>
         <div class="tm">${fmtClock(s.start)}–${fmtClock(end)}</div>
         ${dues.map(x => dueHtml(x, now)).join('')}
@@ -954,8 +842,6 @@ document.addEventListener('change', (e) => {
   if (col) { colors[col.dataset.color] = col.value; saveJSON(KEYS.colors, colors); render(); }
 });
 document.addEventListener('click', (e) => { if (e.target.closest('input[data-est]')) e.stopPropagation(); }, true);
-on('#sheet-course', 'change', loadSheetIntoForm);
-on('#sheet-save', 'click', saveSheetFromForm);
 on('#edit-save', 'click', saveEdit);
 on('#edit-cancel', 'click', closeEdit);
 on('#edit-delete', 'click', () => removeCustom($('#edit').dataset.id));
