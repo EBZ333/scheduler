@@ -711,7 +711,8 @@ on('#quick', 'submit', (e) => {
 });
 document.addEventListener('click', (e) => { const b = e.target.closest('[data-del]'); if (b) { e.preventDefault(); removeCustom(b.dataset.del); } });
 if (window.BG) {
-  const bg = (localStorage.getItem(KEYS.bg) || 'none').replace('hair', 'grass');
+  let bg = localStorage.getItem(KEYS.bg) || 'none';
+  if (!BG.styles.includes(bg)) bg = 'none';
   BG.set(bg);
   if ($('#bg-style')) $('#bg-style').value = bg;
   on('#bg-style', 'change', (e) => { localStorage.setItem(KEYS.bg, e.target.value); BG.set(e.target.value); });

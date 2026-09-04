@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Scheduler</title>
-<link rel="stylesheet" href="style.css?v=14">
+<link rel="stylesheet" href="style.css?v=15">
 </head>
 <body>
 
@@ -22,59 +22,48 @@
 
 <aside id="settings" class="panel" hidden>
   <div class="panel-inner">
-    <section>
-      <h2>Data</h2>
-      <p class="hint">Feeds are fetched hourly by GitHub Actions and stored encrypted. Enter the passphrase set as the <code>DATA_PASSPHRASE</code> secret. It stays in this browser.</p>
-      <form id="unlock-form" class="row">
-        <input id="passphrase" type="password" placeholder="Passphrase" autocomplete="current-password" required>
-        <button type="submit">Unlock</button>
-      </form>
+    <section class="prefs">
+      <div class="pref">
+        <label for="bg-style">background</label>
+        <select id="bg-style">
+          <option value="none">none</option>
+          <option value="dots">dots</option>
+          <option value="constellation">constellation</option>
+          <option value="water">water</option>
+          <option value="smoke">smoke</option>
+          <option value="boids">boids</option>
+          <option value="soccer">soccer</option>
+          <option value="pong">pong</option>
+          <option value="breakout">breakout</option>
+          <option value="snake">snake</option>
+        </select>
+      </div>
+      <div class="pref">
+        <label for="lunch-start">lunch</label>
+        <span class="inline"><input id="lunch-start" type="time" step="300"> – <input id="lunch-end" type="time" step="300"></span>
+      </div>
+      <div class="pref">
+        <label for="clock-seconds">clock</label>
+        <label class="check"><input type="checkbox" id="clock-seconds"> seconds</label>
+      </div>
+      <div class="pref">
+        <label for="passphrase">data</label>
+        <form id="unlock-form" class="inline">
+          <input id="passphrase" type="password" placeholder="passphrase" autocomplete="current-password" required>
+          <button type="submit">unlock</button>
+        </form>
+      </div>
       <p id="status" class="status"></p>
       <p id="meta" class="hint"></p>
       <details>
-        <summary>Upload .ics files manually</summary>
-        <label class="file-row"><span>Canvas</span><input id="feed-file" type="file" accept=".ics,text/calendar"></label>
-        <label class="file-row"><span>Schedule</span><input id="sched-file" type="file" accept=".ics,text/calendar"></label>
+        <summary>more</summary>
+        <label class="file-row"><span>canvas .ics</span><input id="feed-file" type="file" accept=".ics,text/calendar"></label>
+        <label class="file-row"><span>schedule .ics</span><input id="sched-file" type="file" accept=".ics,text/calendar"></label>
+        <button id="forget" type="button" class="text danger">forget passphrase and cached data</button>
       </details>
-      <p><button id="forget" type="button" class="text danger">Forget passphrase and cached data</button></p>
-    </section>
-
-    <section>
-      <h2>Background</h2>
-      <p class="hint">Reacts to the mouse. Monochrome, sits behind everything.</p>
-      <div class="row">
-        <select id="bg-style" aria-label="Background">
-          <option value="none">none</option>
-          <option value="dots">dots</option>
-          <option value="grid">grid</option>
-          <option value="constellation">constellation</option>
-          <option value="water">water</option>
-          <option value="grass">grass</option>
-          <option value="smoke">smoke</option>
-          <option value="soccer">soccer</option>
-          <option value="boids">boids</option>
-          <option value="filings">filings</option>
-        </select>
-      </div>
-    </section>
-
-    <section>
-      <h2>Clock</h2>
-      <label class="check"><input type="checkbox" id="clock-seconds"> show seconds</label>
-    </section>
-
-    <section>
-      <h2>Lunch</h2>
-      <p class="hint">Blocked out of free time on every school day.</p>
-      <div class="row lunch-row">
-        <label>from <input id="lunch-start" type="time" step="300"></label>
-        <label>to <input id="lunch-end" type="time" step="300"></label>
-      </div>
     </section>
 
     <section id="mapping" hidden>
-      <h2>Classes</h2>
-      <p class="hint">Each schedule class, the Canvas course it matches, and an optional nickname used everywhere instead of the full name.</p>
       <div class="map-row map-head"><span>class</span><span>canvas course</span><span>nickname</span></div>
       <div id="mapping-rows"></div>
     </section>
@@ -125,8 +114,8 @@
   <p>Open <button type="button" class="text inline" data-open-settings>Settings</button> and enter your passphrase.</p>
 </div>
 
-<script src="bg.js?v=14"></script>
-<script src="ics.js?v=14"></script>
-<script src="app.js?v=14"></script>
+<script src="bg.js?v=15"></script>
+<script src="ics.js?v=15"></script>
+<script src="app.js?v=15"></script>
 </body>
 </html>

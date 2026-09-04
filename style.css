@@ -86,19 +86,28 @@ input[type=checkbox] { accent-color: var(--ink); }
 
 /* ---------- settings panel ---------- */
 .panel { border-bottom: 2px solid var(--line); background: var(--fill); }
-.panel-inner { max-width: 1400px; margin: 0 auto; padding: 1.5rem 1.25rem; display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; }
-@media (max-width: 800px) { .panel-inner { grid-template-columns: 1fr; gap: 2rem; } }
-.row { display: flex; gap: 0.75rem; align-items: flex-end; margin-bottom: 0.5rem; }
-.row input { flex: 1; min-width: 160px; background: transparent; }
-details { margin: 0.5rem 0; font-weight: 500; }
-summary { cursor: pointer; font-weight: 700; }
-.file-row { display: grid; grid-template-columns: 80px 1fr; gap: 0.5rem; align-items: center; padding: 0.35rem 0; font-size: 0.85rem; }
-.map-row { display: grid; grid-template-columns: minmax(120px, 1fr) 1fr 120px; gap: 1rem; align-items: center; padding: 0.35rem 0; border-top: 1px solid var(--hair); font-size: 0.9rem; }
-.map-row.map-head { border-top: 0; color: var(--ink-3); font-size: 0.75rem; }
-.map-row select, .map-row input { width: 100%; background-color: transparent; }
-.map-row input[type=text] { border: 0; border-bottom: 2px solid var(--ink); padding: 0.3rem 0; border-radius: 0; outline: none; font: inherit; color: inherit; }
-.lunch-row label { display: flex; gap: 0.5rem; align-items: baseline; }
-input[type=time] { background: transparent; border: 0; border-bottom: 2px solid var(--ink); padding: 0.3rem 0; border-radius: 0; outline: none; font: inherit; color: inherit; }
+.panel-inner { max-width: 1400px; margin: 0 auto; padding: 0.9rem 1.25rem; display: grid; grid-template-columns: 320px 1fr; gap: 0 2.5rem; align-items: start; font-size: 0.85rem; }
+@media (max-width: 900px) { .panel-inner { grid-template-columns: 1fr; gap: 0.75rem; } }
+.prefs { display: grid; gap: 0.35rem; }
+.pref { display: grid; grid-template-columns: 76px 1fr; align-items: center; gap: 0.6rem; min-height: 1.9rem; }
+.pref > label:first-child { color: var(--ink-3); }
+.pref select, .pref input[type=time], .pref input[type=password] { padding: 0.15rem 0; font-size: 0.85rem; border-bottom-width: 1px; background-color: transparent; }
+.pref select { width: 100%; }
+.inline { display: flex; align-items: center; gap: 0.4rem; }
+.inline input { flex: 1; min-width: 0; }
+.inline button { padding: 0.25rem 0.6rem; font-size: 0.8rem; }
+.status { min-height: 0; margin: 0.2rem 0 0; font-size: 0.8rem; }
+.hint { margin: 0; font-size: 0.75rem; }
+details { margin: 0.3rem 0 0; font-weight: 500; }
+summary { cursor: pointer; font-weight: 700; color: var(--ink-3); }
+.file-row { display: grid; grid-template-columns: 90px 1fr; gap: 0.5rem; align-items: center; padding: 0.2rem 0; font-size: 0.8rem; }
+.file-row input { font-size: 0.75rem; }
+button.text.danger { padding: 0.2rem 0; font-size: 0.8rem; }
+.map-row { display: grid; grid-template-columns: minmax(120px, 1fr) 1fr 110px; gap: 0.75rem; align-items: center; padding: 0.15rem 0; border-top: 1px solid var(--hair); font-size: 0.85rem; }
+.map-row.map-head { border-top: 0; color: var(--ink-3); font-size: 0.7rem; padding-bottom: 0.1rem; }
+.map-row select, .map-row input { width: 100%; background-color: transparent; padding: 0.15rem 0; font-size: 0.85rem; border-bottom-width: 1px; }
+.map-row input[type=text] { border: 0; border-bottom: 1px solid var(--ink); border-radius: 0; outline: none; font: inherit; color: inherit; font-size: 0.85rem; }
+input[type=time] { background: transparent; border: 0; border-bottom: 1px solid var(--ink); padding: 0.15rem 0; border-radius: 0; outline: none; font: inherit; color: inherit; }
 
 /* ---------- main / sub bar ---------- */
 main { max-width: 1400px; margin: 0 auto; padding: 1.25rem 1.25rem 6rem; }
